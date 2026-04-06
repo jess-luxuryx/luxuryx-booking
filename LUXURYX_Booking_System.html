@@ -714,7 +714,7 @@ async function createCalendarEvent(bk, photographerEmail) {
   const endMs = new Date(startDT).getTime() + dur * 3600000;
   const endDT = new Date(endMs).toISOString().slice(0,19);
   const event = {
-    summary: '📸 ' + (t?.Name||'Booking') + ' — ' + bk.client,
+    summary: '[LUXURYX] ' + (t?.Name||'Booking') + ' - ' + bk.client,
     location: 'Dubai, UAE',
     description: ['Property: '+bk.client, 'Type: '+(t?.Name||'')+(dur?'('+dur+'h)':''), bk.agent?'Agent: '+bk.agent:'', bk.notes?'Notes: '+bk.notes:''].filter(Boolean).join('\n'),
     start: { dateTime: startDT, timeZone: 'Asia/Dubai' },
@@ -803,10 +803,12 @@ async function saveBk(){
       if(m.Email&&accessToken){
         btn.textContent='Creating calendar event…';
         try {
+          console.log('Creating event for:', m.Email, 'typeId:', typeId, 'type:', getType(typeId));
           await createCalendarEvent({date,time,typeId,client,agent,notes},m.Email);
           await api({action:'markCalAdded',id:res.id}); newBk.CalAdded='TRUE';
           notify('Booking confirmed — calendar invite sent to '+m.Name+' ✓',true);
         } catch(calErr){
+          console.error('Calendar error:', calErr);
           notify('Booking saved — calendar invite failed: '+calErr.message);
         }
       } else {
