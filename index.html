@@ -1342,7 +1342,7 @@ function renderBkTable(){
     const sb={upcoming:'rose',completed:'green',cancelled:'red'}[b.Status]||'gry';
     const calAdded = String(b.CalAdded).toUpperCase()==='TRUE';
     const calCell = b.Status==='upcoming'
-      ``
+      ? `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'Pending'}</span>`
       : `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'—'}</span>`;
     return `<tr>
       <td style="color:var(--navy);font-weight:400">${fmtDate(b.Date)}</td>
