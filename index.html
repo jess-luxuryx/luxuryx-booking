@@ -1482,7 +1482,10 @@ function openDetail(id){
   const acts=document.getElementById('det-actions');acts.innerHTML='';
   if(b.Status==='upcoming'){
     const cancelBtn=document.createElement('button');cancelBtn.className='btn bdanger';cancelBtn.textContent='Cancel Booking';cancelBtn.onclick=cancelBk;acts.appendChild(cancelBtn);
-    // Calendar invites are sent automatically — no manual link button needed
+  }
+  // Delete button for admins - permanently removes booking
+  if(isAdmin()){
+    const deleteBtn=document.createElement('button');deleteBtn.className='btn bdanger';deleteBtn.style.marginLeft='8px';deleteBtn.textContent='Delete Permanently';deleteBtn.onclick=deleteBk;acts.appendChild(deleteBtn);
   }
   const closeBtn=document.createElement('button');closeBtn.className='btn';closeBtn.textContent='Close';closeBtn.onclick=()=>closeMo('mo-detail');acts.appendChild(closeBtn);
   document.getElementById('mo-detail').classList.add('open');
@@ -1527,6 +1530,33 @@ async function cancelBk(){
       notify('Booking cancelled');
     }
     
+    closeMo('mo-detail');
+    renderDashboard();
+    renderBkTable();
+    renderCal();
+  } catch(e){err(e.message);}
+}
+
+async function deleteBk(){
+  if(!viewBkId)return;
+  if(!confirm('Permanently delete this booking? This cannot be undone.')) return;
+  
+  const b = D.bookings.find(x=>String(x.ID)===String(viewBkId));
+  if(!b) return;
+  
+  try {
+    // Delete calendar event first if it exists
+    if (b.CalEventId && accessToken) {
+      await deleteCalendarEvent(b.CalEventId);
+    }
+    
+    // Delete from database
+    await api({action:'deleteBooking', id:viewBkId});
+    
+    // Remove from local data
+    D.bookings = D.bookings.filter(x=>String(x.ID)!==String(viewBkId));
+    
+    notify('Booking permanently deleted',true);
     closeMo('mo-detail');
     renderDashboard();
     renderBkTable();
