@@ -164,6 +164,36 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .setup-banner{background:rgba(227,164,138,0.12);border:1px solid rgba(227,164,138,0.3);border-radius:6px;padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--td);line-height:1.8}
 .setup-banner strong{color:var(--navy);font-weight:500}
 @media(max-width:700px){.g4,.g3,.g2{grid-template-columns:1fr}.fr{grid-template-columns:1fr}.hnav .nb{font-size:9px;padding:6px 8px;letter-spacing:1px}}
+
+/* ── Calendly-style booking ───────────────────────────────────────────── */
+.bk-flow{display:flex;flex-direction:column;gap:0}
+.bk-top{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.bk-middle{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--bn);border-radius:6px;overflow:hidden;min-height:320px}
+.bk-cal-wrap{border-right:1px solid var(--bn);padding:16px}
+.bk-cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.bk-cal-title{font-size:13px;font-weight:500;color:var(--navy)}
+.bk-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.bk-dow{text-align:center;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--tl);padding:4px 0;font-weight:500}
+.bk-day{text-align:center;padding:6px 2px;font-size:12px;border-radius:50%;cursor:default;aspect-ratio:1;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.bk-day.avail{color:var(--navy);cursor:pointer;font-weight:500}
+.bk-day.avail:hover{background:var(--rose);color:var(--white)}
+.bk-day.unavail{color:rgba(12,35,62,0.2);text-decoration:line-through}
+.bk-day.today{border:1.5px solid var(--rose)}
+.bk-day.selected{background:var(--navy);color:var(--white)!important}
+.bk-day.empty{visibility:hidden}
+.bk-slots-wrap{padding:16px;background:var(--offwhite);overflow-y:auto;max-height:360px}
+.bk-slots-title{font-size:10px;font-weight:500;color:var(--tl);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+.slot-grid{display:flex;flex-direction:column;gap:6px}
+.slot{border:1.5px solid var(--bn);border-radius:4px;padding:10px 14px;cursor:pointer;transition:all .15s;background:var(--white)}
+.slot.slot-avail:hover{border-color:var(--navy);background:var(--white)}
+.slot.slot-sel{border-color:var(--navy);background:var(--navy);color:var(--white)}
+.slot.slot-busy{background:rgba(12,35,62,0.03);cursor:not-allowed;opacity:0.45}
+.slot-time{font-size:12px;font-weight:500}
+.slot-end{font-size:10px;opacity:0.7;margin-top:2px}
+.slot-busy-lbl{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--tl);margin-top:2px}
+.bk-details{border-top:1px solid var(--bn);margin-top:16px;padding-top:16px}
+.bk-empty-msg{color:var(--tl);font-size:12px;text-align:center;padding:40px 20px;line-height:1.8}
+@media(max-width:600px){.bk-middle{grid-template-columns:1fr}.bk-cal-wrap{border-right:none;border-bottom:1px solid var(--bn)}.bk-top{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -283,16 +313,34 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 
 <!-- ══ MODALS ══════════════════════════════════════════════════════════════ -->
 <div class="mo" id="mo-booking">
-  <div class="md">
+  <div class="md" style="max-width:660px">
     <button class="mx" onclick="closeMo('mo-booking')">&#215;</button>
-    <div class="mt2" id="bm-title">New Booking</div><div class="ms">Schedule a Session</div>
-    <div class="fr"><div class="fg" style="margin-bottom:0"><label class="fl">Date</label><input class="fi" type="date" id="b-date"></div><div class="fg" style="margin-bottom:0"><label class="fl">Booking Type</label><select class="fs" id="b-type"></select></div></div>
-    <div class="fr" style="margin-top:12px"><div class="fg" style="margin-bottom:0"><label class="fl">Start Time</label><input class="fi" type="time" id="b-time" value="09:00"></div><div class="fg" style="margin-bottom:0"><label class="fl">Photographer / Videographer</label><select class="fs" id="b-ph" onchange="chkAvail()"></select></div></div>
-    <div class="fg" style="margin-top:16px"><label class="fl">Client / Property Name</label><input class="fi" type="text" id="b-client" placeholder="e.g. Palm Jumeirah Villa — Al Maktoum"></div>
-    <div class="fg"><label class="fl">Agent Name</label><input class="fi" type="text" id="b-agent" placeholder="Agent responsible for this booking"></div>
-    <div class="fg"><label class="fl">Notes</label><input class="fi" type="text" id="b-notes" placeholder="Access codes, special requirements..."></div>
-    <div id="avail-hint" style="font-size:11px;padding:8px 12px;border-radius:3px;display:none;margin-bottom:4px"></div>
-    <div class="mact"><button class="btn" onclick="closeMo('mo-booking')">Cancel</button><button class="btn br" onclick="saveBk()" id="save-bk-btn">Confirm Booking</button></div>
+    <div class="mt2" id="bm-title">New Booking</div>
+    <div class="ms">Schedule a Session</div>
+    <div class="bk-flow">
+      <div class="bk-top">
+        <div class="fg" style="margin-bottom:0"><label class="fl">Booking Type</label><select class="fs" id="b-type" onchange="onBkTypeChange()"></select></div>
+        <div class="fg" style="margin-bottom:0" id="bk-ph-wrap"><label class="fl">Photographer / Videographer</label><select class="fs" id="b-ph" onchange="onBkPhChange()"></select></div>
+      </div>
+      <div class="bk-middle">
+        <div class="bk-cal-wrap">
+          <div id="bk-cal-body"></div>
+        </div>
+        <div class="bk-slots-wrap">
+          <div id="bk-slots"><div class="bk-empty-msg">👈 Select a date<br>to see available times</div></div>
+        </div>
+      </div>
+      <div class="bk-details" id="bk-details" style="display:none">
+        <div class="fg"><label class="fl">Property Address</label><input class="fi" type="text" id="b-client" placeholder="e.g. Villa 12, Palm Jumeirah, Dubai"></div>
+        <div class="fg"><label class="fl">Google Maps Pin</label><input class="fi" type="url" id="b-maps" placeholder="https://maps.app.goo.gl/..."></div>
+        <div class="fg"><label class="fl">Agent Name</label><input class="fi" type="text" id="b-agent" placeholder="Agent responsible for this booking"></div>
+        <div class="fg" style="margin-bottom:0"><label class="fl">Notes</label><input class="fi" type="text" id="b-notes" placeholder="Access codes, special requirements..."></div>
+      </div>
+    </div>
+    <div class="mact">
+      <button class="btn" onclick="closeMo('mo-booking')">Cancel</button>
+      <button class="btn br" onclick="saveBk()" id="save-bk-btn" disabled>Confirm Booking</button>
+    </div>
   </div>
 </div>
 
@@ -369,12 +417,17 @@ let CU = null;
 let accessToken = null;
 let tokenClient = null;
 
-let D = { bookings:[], team:[], bookingTypes:[], users:[], settings:{} };
+let D = { bookings:[], team:[], bookingTypes:[], users:[], settings:{}, assignments:{} };
 let gcalCache = {}; // keyed by "email-year-month" -> array of events
 
 // ══ API ════════════════════════════════════════════════════════════════════
 async function api(payload) {
   if (!API_URL) throw new Error('API URL not configured. Please set it in Settings.');
+  // Refresh token if it's older than 45 minutes
+  if (accessToken && tokenIssuedAt && Date.now() - tokenIssuedAt > 45 * 60 * 1000) {
+    refreshTokenSilently();
+    await new Promise(r => setTimeout(r, 1000)); // wait 1s for refresh
+  }
   const res = await fetch(API_URL, {
     method:'POST', mode:'cors',
     headers:{'Content-Type':'text/plain'},
@@ -409,6 +462,18 @@ function initGoogleAuth() {
     callback: handleTokenResponse
   });
 }
+
+// Silently refresh the access token before it expires
+function refreshTokenSilently() {
+  if (!tokenClient || !CU) return;
+  tokenClient.requestAccessToken({ prompt: '' }); // prompt='' means silent refresh
+}
+
+// Refresh token every 45 minutes (tokens last 1 hour)
+setInterval(refreshTokenSilently, 45 * 60 * 1000);
+
+// Also refresh before any API call if token is stale
+let tokenIssuedAt = null;
 
 function signInWithGoogle() {
   const urlInput = document.getElementById('lin-api-url');
@@ -452,6 +517,7 @@ async function handleTokenResponse(response) {
   }
 
   accessToken = response.access_token;
+  tokenIssuedAt = Date.now();
   console.log('Got access token, fetching user info...');
 
   try {
@@ -506,6 +572,19 @@ async function loadAllData() {
     D.bookingTypes = res.bookingTypes || [];
     D.users        = res.users        || [];
     D.settings     = res.settings     || {};
+    D.assignments  = res.assignments   || {};
+    // Sync server assignments to local cache
+    typeAssignments = D.assignments;
+    // Google Sheets returns time values as ISO date strings — extract HH:MM
+    ['workStart','workEnd'].forEach(k => {
+      const v = D.settings[k];
+      if (v && v.includes('T')) {
+        const d = new Date(v);
+        const h = String(d.getUTCHours()).padStart(2,'0');
+        const m = String(d.getUTCMinutes()).padStart(2,'0');
+        D.settings[k] = h + ':' + m;
+      }
+    });
   } finally { hideLoad(); }
 }
 
@@ -619,16 +698,24 @@ async function fetchGCalForMember(email, year, month) {
   try {
     const timeMin = new Date(year, month, 1).toISOString();
     const timeMax = new Date(year, month+1, 0, 23, 59, 59).toISOString();
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(email)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=100`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(email)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=200`;
     const res = await fetch(url, { headers: { Authorization: 'Bearer '+accessToken } });
     const data = await res.json();
     if (data.error) return [];
-    const events = (data.items||[]).filter(e=>e.status!=='cancelled').map(e=>({
-      id: e.id,
-      title: e.summary||'Busy',
-      date: (e.start.date || e.start.dateTime||'').slice(0,10),
-      email
-    }));
+    const events = (data.items||[]).filter(e=>e.status!=='cancelled').map(e=>{
+      const isAllDay = !!e.start.date;
+      const startDT = e.start.dateTime || '';
+      const endDT = e.end.dateTime || '';
+      return {
+        id: e.id,
+        title: e.summary||'Busy',
+        date: (e.start.date || startDT).slice(0,10),
+        allDay: isAllDay,
+        startTime: isAllDay ? null : startDT.slice(11,16),
+        endTime: isAllDay ? null : endDT.slice(11,16),
+        email
+      };
+    });
     gcalCache[key] = events;
     return events;
   } catch(e) { return []; }
@@ -664,12 +751,12 @@ function renderCal() {
     const ds=`${calY}-${String(calM+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
     if(!oth&&new Date(calY,calM,dn).toDateString()===TODAY.toDateString()) cls+=' tod';
 
-    // App bookings
-    const evts=D.bookings.filter(b=>b.Status!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
+    // App bookings — only show for current month days
+    const evts = oth ? [] : D.bookings.filter(b=>b.Status!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
     const evH=evts.slice(0,2).map(b=>{const t=getType(b.TypeID);return`<div class="dev ${evCls(t.Color)}" onclick="event.stopPropagation();openDetail('${b.ID}')" title="${b.Client}">${b.Time} ${t.Name}</div>`;}).join('');
 
-    // GCal events (external) — show in a muted style
-    const dayGcal = gcalEvts.filter(e=>e.date===ds);
+    // GCal events — only show for current month days
+    const dayGcal = oth ? [] : gcalEvts.filter(e=>e.date===ds);
     const gcalH = dayGcal.slice(0,2).map(e=>`<div class="dev" style="background:rgba(66,133,244,0.12);color:#3367d6;border-left:2px solid #4285f4" title="${e.title} (Google Calendar)">📅 ${e.title}</div>`).join('');
 
     const total = evts.length + dayGcal.length;
@@ -693,6 +780,194 @@ function prevM(){if(calM===0){calM=11;calY--;}else calM--;renderCal();}
 function nextM(){if(calM===11){calM=0;calY++;}else calM++;renderCal();}
 
 // ══ Booking Modal ════════════════════════════════════════════════════════════
+// Calendly-style booking
+let bkCalY = null, bkCalM = null, bkSelDate = null, bkSelTime = null;
+
+function onBkTypeChange() { bkSelTime = null; bkSelDate = null; updateBkPhSection(); renderBkCal(); syncBkGCal(); }
+function onBkPhChange()   { bkSelDate = null; bkSelTime = null; renderBkCal(); syncBkGCal(); }
+function bkPrevM() { if(bkCalM===0){bkCalM=11;bkCalY--;}else bkCalM--; renderBkCal(); syncBkGCal(); }
+function bkNextM() { if(bkCalM===11){bkCalM=0;bkCalY++;}else bkCalM++; renderBkCal(); syncBkGCal(); }
+
+async function syncBkGCal() {
+  if (!accessToken) return;
+  const typeId = document.getElementById('b-type')?.value;
+  const a = getAssignment(typeId);
+
+  let memberIds = [];
+  if (a.mode === 'all') memberIds = a.memberIds;
+  else if (a.mode === 'exclusive') memberIds = a.memberIds.slice(0,1);
+  else {
+    // 'any' — fetch for selected member from dropdown
+    const phEl = document.getElementById('b-ph');
+    if (phEl?.value) memberIds = [phEl.value];
+  }
+
+  if (memberIds.length === 0) return;
+  const members = memberIds.map(id => D.team.find(m=>String(m.ID)===String(id))).filter(m=>m?.Email);
+  await Promise.all(members.map(m => fetchGCalForMember(m.Email, bkCalY, bkCalM)));
+  renderBkCal();
+}
+
+function parseWorkTime(val, fallback) {
+  if (!val) return fallback;
+  const s = String(val);
+  // Already in HH:MM format
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+  // Google Sheets stores times as full date strings e.g. '1899-12-30T04:18:48.000Z'
+  try {
+    const d = new Date(s);
+    if (!isNaN(d)) return String(d.getUTCHours()).padStart(2,'0') + ':' + String(d.getUTCMinutes()).padStart(2,'0');
+  } catch(e) {}
+  return fallback;
+}
+
+function getTimeSlots(workStart, workEnd, dur) {
+  const slots = [];
+  const ws = parseWorkTime(workStart, '09:00');
+  const we = parseWorkTime(workEnd, '18:00');
+  const [sh,sm] = ws.split(':').map(Number);
+  const [eh,em] = we.split(':').map(Number);
+  const startMins = sh*60+sm, endMins = eh*60+em;
+  for (let m = startMins; m + dur*60 <= endMins; m += 30)
+    slots.push(String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'));
+  return slots;
+}
+
+function isSlotAvailable(phId, ds, time, dur) {
+  const [h,mi] = time.split(':').map(Number);
+  const slotStart = h*60+mi, slotEnd = slotStart + dur*60;
+  const conflicts = D.bookings.filter(b=>
+    String(b.PhotographerID)===String(phId) && isoDate(b.Date)===ds &&
+    b.Status!=='cancelled' && String(b.ID)!==String(editBkId)
+  );
+  for (const b of conflicts) {
+    const bdur = parseInt(getType(b.TypeID)?.Duration)||2;
+    const [bh,bm] = (b.Time||'09:00').split(':').map(Number);
+    const bStart=bh*60+bm, bEnd=bStart+bdur*60;
+    if (slotStart<bEnd && slotEnd>bStart) return false;
+  }
+  const member = D.team.find(m=>String(m.ID)===String(phId));
+  if (member?.Email) {
+    const d = new Date(ds+'T12:00:00');
+    const key = member.Email+'-'+d.getFullYear()+'-'+d.getMonth();
+    const dayEvts = (gcalCache[key]||[]).filter(e=>e.date===ds);
+    for (const e of dayEvts) {
+      // Skip all-day events (holidays, birthdays etc.) — only block timed events
+      if (e.allDay || !e.startTime || !e.endTime) continue;
+      const [eh2,em2]=e.startTime.split(':').map(Number);
+      const [eh3,em3]=e.endTime.split(':').map(Number);
+      const eStart=eh2*60+em2, eEnd=eh3*60+em3;
+      if (slotStart < eEnd && slotEnd > eStart) return false;
+    }
+  }
+  return true;
+}
+
+function dayHasAvailability(phId, ds, dur) {
+  // Block weekends — check workDays setting (defaults to Mon-Fri)
+  const dayOfWeek = new Date(ds+'T12:00:00').getDay(); // 0=Sun, 6=Sat
+  const workDays = D.settings?.workDays || 'Mon,Tue,Wed,Thu,Fri';
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  if (!workDays.includes(dayNames[dayOfWeek])) return false;
+  const ws = D.settings?.workStart || '09:00';
+  const we = D.settings?.workEnd || '17:00';
+  return getTimeSlots(ws, we, dur).some(t=>isSlotAvailable(phId, ds, t, dur));
+}
+
+function fmtTime12(t) {
+  const [h,m] = t.split(':').map(Number);
+  return (h%12||12)+':'+(m===0?'00':String(m).padStart(2,'0'))+(h>=12?' PM':' AM');
+}
+
+function addMins(t, mins) {
+  const [h,m] = t.split(':').map(Number), total=h*60+m+mins;
+  return String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');
+}
+
+function renderBkCal() {
+  const typeId = document.getElementById('b-type')?.value;
+  if (!typeId) return;
+  const a = getAssignment(typeId);
+  // Get phId — from dropdown for 'any', from assignment for 'all'/'exclusive'
+  const phEl = document.getElementById('b-ph');
+  const phId = phEl ? phEl.value : (a.memberIds[0] || D.team[0]?.ID);
+  if (!phId) return;
+  const dur = parseInt(getType(typeId)?.Duration)||2;
+  const todayStr = TODAY.toISOString().slice(0,10);
+  const fd = new Date(bkCalY, bkCalM, 1).getDay();
+  const dim = new Date(bkCalY, bkCalM+1, 0).getDate();
+  let html = '<div class="bk-cal-hdr"><button class="caln" onclick="bkPrevM()">&#8249;</button>';
+  html += '<div class="bk-cal-title">'+MONTHS[bkCalM]+' '+bkCalY+'</div>';
+  html += '<button class="caln" onclick="bkNextM()">&#8250;</button></div>';
+  html += '<div class="bk-cal-grid">';
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>{html+='<div class="bk-dow">'+d+'</div>';});
+  for(let i=0;i<fd;i++) html+='<div class="bk-day empty"></div>';
+  for(let d=1;d<=dim;d++){
+    const ds=bkCalY+'-'+String(bkCalM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const typeId=document.getElementById('b-type').value;
+    const isPast=ds<todayStr, avail=!isPast&&dayHasAvailabilityForType(typeId,ds,dur);
+    const sel=ds===bkSelDate, isToday=ds===todayStr;
+    let cls='bk-day'+(avail?' avail':' unavail')+(isToday?' today':'')+(sel?' selected':'');
+    html+='<div class="'+cls+'"'+(avail?' onclick="selectBkDate(\''+ds+'\')"':'')+'>'+d+'</div>';
+  }
+  html+='</div>';
+  document.getElementById('bk-cal-body').innerHTML=html;
+  renderBkSlots(phId, dur);
+}
+
+function renderBkSlots(phId, dur) {
+  const el=document.getElementById('bk-slots');
+  if(!bkSelDate){el.innerHTML='<div class="bk-empty-msg">Select a date to see available times</div>';return;}
+  const typeId = document.getElementById('b-type')?.value;
+  const a = getAssignment(typeId);
+  const slots=getTimeSlots(D.settings?.workStart||'09:00', D.settings?.workEnd||'17:00', dur);
+  const dateLabel=new Date(bkSelDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  let html='<div class="bk-slots-title">'+dateLabel+'</div><div class="slot-grid">';
+  for(const t of slots){
+    // For 'all' mode check every required member, otherwise just check phId
+    let avail;
+    if (a.mode === 'all') {
+      avail = a.memberIds.every(id => isSlotAvailable(id, bkSelDate, t, dur));
+    } else {
+      avail = isSlotAvailable(phId, bkSelDate, t, dur);
+    }
+    const sel=t===bkSelTime;
+    const endT=addMins(t,dur*60);
+    html+='<div class="slot '+(avail?'slot-avail':'slot-busy')+(sel?' slot-sel':'')+'" '+(avail?'onclick="selectBkTime(\''+t+'\')"':'')+'>'+
+      '<div class="slot-time">'+fmtTime12(t)+'</div>'+
+      (sel?'<div class="slot-end">'+fmtTime12(t)+' to '+fmtTime12(endT)+'</div>':
+           avail?'<div class="slot-end">'+fmtTime12(endT)+'</div>':
+                 '<div class="slot-busy-lbl">Unavailable</div>')+
+    '</div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function selectBkDate(ds){
+  bkSelDate=ds;
+  const typeId = document.getElementById('b-type')?.value;
+  const dur = parseInt(getType(typeId)?.Duration)||2;
+  const a = getAssignment(typeId);
+  // For any mode use dropdown, for all/exclusive use first assigned member
+  const phEl = document.getElementById('b-ph');
+  const phId = phEl ? phEl.value : (a.memberIds[0] || '');
+  if(bkSelTime && !isSlotAvailable(phId, ds, bkSelTime, dur)) bkSelTime=null;
+  renderBkCal(); updateBkDetails();
+}
+
+function selectBkTime(t){
+  bkSelTime=t; renderBkCal(); updateBkDetails();
+  setTimeout(()=>document.getElementById('bk-details').scrollIntoView({behavior:'smooth',block:'nearest'}),150);
+}
+
+function updateBkDetails(){
+  const ready=bkSelDate&&bkSelTime;
+  document.getElementById('bk-details').style.display=ready?'block':'none';
+  document.getElementById('save-bk-btn').disabled=!ready;
+}
+
+
 // ══ Google Calendar API ════════════════════════════════════════════════════
 async function checkFreeBusy(photographerEmail, date, startTime, durationHours) {
   const startDT = date + 'T' + startTime + ':00';
@@ -708,20 +983,44 @@ async function checkFreeBusy(photographerEmail, date, startTime, durationHours) 
   return (data.calendars[photographerEmail]?.busy || []);
 }
 
-async function createCalendarEvent(bk, photographerEmail) {
-  const t = getType(bk.typeId); const dur = parseInt(t?.Duration)||2;
-  const startDT = bk.date + 'T' + bk.time + ':00';
-  const endMs = new Date(startDT).getTime() + dur * 3600000;
-  const endDT = new Date(endMs).toISOString().slice(0,19);
+async function createCalendarEvent(bk, photographerEmails, agentEmail) {
+  // Accept single email or array
+  if (typeof photographerEmails === 'string') photographerEmails = [photographerEmails];
+  const t = getType(bk.typeId);
+  const dur = parseInt(t?.Duration)||2;
+
+  // Build start/end with explicit Dubai offset (+04:00) to avoid timezone issues
+  const startDT = bk.date + 'T' + bk.time + ':00+04:00';
+  const [sh, sm] = bk.time.split(':').map(Number);
+  const endTotalMins = sh * 60 + sm + dur * 60;
+  const endH = String(Math.floor(endTotalMins / 60)).padStart(2, '0');
+  const endM = String(endTotalMins % 60).padStart(2, '0');
+  const endDT = bk.date + 'T' + endH + ':' + endM + ':00+04:00';
+
+  // Build attendees list — photographer always included, agent if they have an email
+  const attendees = photographerEmails.map(e=>({ email: e }));
+  if (agentEmail && !photographerEmails.includes(agentEmail)) {
+    attendees.push({ email: agentEmail });
+  }
+
+  const desc = [
+    'Address: ' + bk.client,
+    bk.maps ? 'Maps: ' + bk.maps : '',
+    'Type: ' + (t?.Name||'') + ' (' + dur + 'h)',
+    bk.agent ? 'Agent: ' + bk.agent : '',
+    bk.notes ? 'Notes: ' + bk.notes : ''
+  ].filter(Boolean).join('\n');
+
   const event = {
     summary: '[LUXURYX] ' + (t?.Name||'Booking') + ' - ' + bk.client,
     location: 'Dubai, UAE',
-    description: ['Property: '+bk.client, 'Type: '+(t?.Name||'')+(dur?'('+dur+'h)':''), bk.agent?'Agent: '+bk.agent:'', bk.notes?'Notes: '+bk.notes:''].filter(Boolean).join('\n'),
+    description: desc,
     start: { dateTime: startDT, timeZone: 'Asia/Dubai' },
     end:   { dateTime: endDT,   timeZone: 'Asia/Dubai' },
-    attendees: [{ email: photographerEmail }],
+    attendees,
     reminders: { useDefault: false, overrides: [{method:'email',minutes:1440},{method:'popup',minutes:60}] }
   };
+
   const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all', {
     method:'POST', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
     body: JSON.stringify(event)
@@ -739,29 +1038,189 @@ function showAvailHint(available, text) {
   h.textContent = text;
 }
 
+// ══ Booking Type Assignment System ════════════════════════════════════════
+// typeAssignments: { [typeId]: { mode: 'any'|'all'|'exclusive', memberIds: [...] } }
+let typeAssignments = {};
+
+function loadAssignments() {
+  // Always sync from D.assignments (server source of truth)
+  typeAssignments = JSON.parse(JSON.stringify(D.assignments || {}));
+}
+
+async function saveAssignment(typeId) {
+  const a = typeAssignments[String(typeId)];
+  if (!a) return;
+  try {
+    await api({ action: 'saveAssignment', typeId: String(typeId), mode: a.mode, memberIds: a.memberIds });
+    // Sync back to D.assignments so it's immediately available everywhere
+    D.assignments = JSON.parse(JSON.stringify(typeAssignments));
+  } catch(e) {
+    notify('Failed to save assignment: ' + e.message);
+  }
+}
+
+function getAssignment(typeId) {
+  const a = typeAssignments[String(typeId)];
+  if (!a) return { mode: 'any', memberIds: D.team.map(m=>String(m.ID)) };
+  // Sanitise memberIds — convert scientific notation back to full ID strings
+  const cleanIds = (a.memberIds || []).map(id => {
+    const n = Number(id);
+    // If it parsed as a float with scientific notation, convert properly
+    return Number.isFinite(n) ? String(Math.round(n)) : String(id);
+  });
+  return { mode: a.mode || 'any', memberIds: cleanIds };
+}
+
+// Get photographer IDs for current booking based on type assignment
+function getBkPhIds() {
+  const typeId = document.getElementById('b-type').value;
+  const a = getAssignment(typeId);
+  if (a.mode === 'all') return a.memberIds;
+  if (a.mode === 'exclusive') return a.memberIds.slice(0,1);
+  // 'any' — return selected from dropdown
+  return [document.getElementById('b-ph').value];
+}
+
+// Get all required member emails for calendar invite
+function getBkAttendeeEmails(typeId, phId) {
+  const a = getAssignment(typeId);
+  let ids = [];
+  if (a.mode === 'all') ids = a.memberIds;
+  else if (a.mode === 'exclusive') ids = a.memberIds.slice(0,1);
+  else ids = [String(phId)];
+  return ids.map(id => D.team.find(m=>String(m.ID)===String(id))?.Email).filter(Boolean);
+}
+
+// Update the photographer section in booking modal based on type
+function updateBkPhSection() {
+  const typeId = document.getElementById('b-type').value;
+  const a = getAssignment(typeId);
+  const phWrap = document.getElementById('bk-ph-wrap');
+  const phSel = document.getElementById('b-ph');
+
+  if (a.mode === 'all') {
+    const names = a.memberIds.map(id=>getMember(id).Name).join(' + ');
+    phWrap.innerHTML = `<label class="fl">Photographers</label>
+      <div style="background:var(--offwhite);border:1px solid var(--bn);border-radius:3px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:400">
+        ${names} <span class="bdg nvy" style="margin-left:6px;font-size:9px">Both required</span>
+      </div>`;
+  } else if (a.mode === 'exclusive') {
+    const m = getMember(a.memberIds[0]);
+    phWrap.innerHTML = `<label class="fl">Photographer</label>
+      <div style="background:var(--offwhite);border:1px solid var(--bn);border-radius:3px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:400">
+        ${m.Name} <span class="bdg rose" style="margin-left:6px;font-size:9px">Auto-assigned</span>
+      </div>`;
+  } else {
+    // 'any' — show filtered dropdown
+    const eligibleIds = a.memberIds.length > 0 ? a.memberIds : D.team.map(m=>String(m.ID));
+    const eligible = D.team.filter(m=>eligibleIds.includes(String(m.ID)));
+    phWrap.innerHTML = `<label class="fl">Photographer / Videographer</label>
+      <select class="fs" id="b-ph" onchange="onBkPhChange()">${eligible.map(m=>`<option value="${m.ID}">${m.Name}</option>`).join('')}</select>`;
+  }
+}
+
+// Check availability for all required members on a given day
+function dayHasAvailabilityForType(typeId, ds, dur) {
+  const a = getAssignment(typeId);
+  let ids = [];
+  if (a.mode === 'all') ids = a.memberIds;
+  else if (a.mode === 'exclusive') ids = a.memberIds.slice(0,1);
+  else {
+    // any — check if at least one eligible member is free
+    const eligibleIds = a.memberIds.length > 0 ? a.memberIds : D.team.map(m=>String(m.ID));
+    return eligibleIds.some(id => dayHasAvailability(id, ds, dur));
+  }
+  // all/exclusive — ALL required members must be free
+  return ids.every(id => dayHasAvailability(id, ds, dur));
+}
+
+// Render assignment settings for a booking type
+function renderTypeAssignment(typeId) {
+  const a = getAssignment(typeId);
+  const modeLabels = {any:'Any of (agent picks one)', all:'All of (all required)', exclusive:'Exclusive (auto-assigned)'};
+  const modeDisplay = {any:'Any of', all:'All required', exclusive:'Exclusive'};
+  const memberNames = a.memberIds.map(id=>getMember(id).Name).filter(n=>n!=='Unassigned').join(', ') || 'All team';
+
+  // Non-superadmins see read-only view
+  if (!isSuperAdmin()) {
+    return `<div class="type-assign" id="assign-${typeId}" style="background:var(--offwhite);border-radius:4px;padding:10px 12px;margin-top:8px;display:flex;gap:12px;align-items:center">
+      <span class="bdg nvy" style="font-size:9px">${modeDisplay[a.mode]||'Any of'}</span>
+      <span style="font-size:11px;color:var(--tl)">${memberNames}</span>
+    </div>`;
+  }
+
+  return `<div class="type-assign" id="assign-${typeId}" style="background:var(--offwhite);border-radius:4px;padding:12px;margin-top:8px">
+    <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--tl);font-weight:500;margin-bottom:8px">Team Assignment <span class="bdg rose" style="font-size:8px;margin-left:4px">Super Admin</span></div>
+    <select class="fs" style="margin-bottom:8px;font-size:11px" onchange="setAssignMode('${typeId}',this.value)">
+      ${Object.entries(modeLabels).map(([v,l])=>`<option value="${v}"${a.mode===v?' selected':''}>${l}</option>`).join('')}
+    </select>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${D.team.map(m=>`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--navy);cursor:pointer">
+        <input type="checkbox" ${a.memberIds.includes(String(m.ID))?'checked':''} onchange="toggleAssignMember('${typeId}','${m.ID}',this.checked)" style="accent-color:var(--navy)">
+        ${m.Name}
+      </label>`).join('')}
+    </div>
+  </div>`;
+}
+
+function setAssignMode(typeId, mode) {
+  if (!typeAssignments[typeId]) typeAssignments[typeId] = { mode, memberIds: D.team.map(m=>String(m.ID)) };
+  typeAssignments[typeId].mode = mode;
+  saveAssignment(typeId).then(() => {
+    notify('Assignment saved', true);
+    const el = document.getElementById('assign-'+typeId);
+    if (el) el.outerHTML = renderTypeAssignment(typeId);
+  });
+}
+
+function toggleAssignMember(typeId, memberId, checked) {
+  if (!typeAssignments[typeId]) typeAssignments[typeId] = { mode: 'any', memberIds: D.team.map(m=>String(m.ID)) };
+  const ids = typeAssignments[typeId].memberIds;
+  if (checked && !ids.includes(String(memberId))) ids.push(String(memberId));
+  if (!checked) typeAssignments[typeId].memberIds = ids.filter(id=>id!==String(memberId));
+  saveAssignment(typeId).then(() => notify('Assignment saved', true));
+}
+
 function openBkModal(id=null) {
   editBkId=id;
+  bkCalY=TODAY.getFullYear(); bkCalM=TODAY.getMonth();
+  bkSelDate=null; bkSelTime=null;
   document.getElementById('b-type').innerHTML=D.bookingTypes.map(t=>`<option value="${t.ID}">${t.Name} (${t.Duration}h)</option>`).join('');
-  document.getElementById('b-ph').innerHTML=D.team.map(m=>`<option value="${m.ID}">${m.Name} — ${m.Role}</option>`).join('');
+  document.getElementById('b-ph').innerHTML=D.team.map(m=>`<option value="${m.ID}">${m.Name}</option>`).join('');
   if(CU?.role==='photographer'){
     const me=D.team.find(m=>m.Name===CU.name);
     if(me) document.getElementById('b-ph').value=me.ID;
     document.getElementById('b-ph').disabled=true;
-    document.getElementById('b-type').value=D.bookingTypes.find(t=>t.Name.includes('Editing'))?.ID||'';
   } else { document.getElementById('b-ph').disabled=false; }
   if(id){
     const b=D.bookings.find(x=>String(x.ID)===String(id));
-    if(b){document.getElementById('b-date').value=isoDate(b.Date);document.getElementById('b-time').value=b.Time;document.getElementById('b-type').value=b.TypeID;document.getElementById('b-ph').value=b.PhotographerID;document.getElementById('b-client').value=b.Client;document.getElementById('b-agent').value=b.Agent||'';document.getElementById('b-notes').value=b.Notes||'';}
-    document.getElementById('bm-title').textContent='Edit Booking';document.getElementById('save-bk-btn').textContent='Update Booking';
+    if(b){
+      document.getElementById('b-type').value=b.TypeID;
+      document.getElementById('b-ph').value=b.PhotographerID;
+      document.getElementById('b-client').value=b.Client;
+      document.getElementById('b-maps').value=b.Maps||'';
+      document.getElementById('b-agent').value=b.Agent||'';
+      document.getElementById('b-notes').value=b.Notes||'';
+      bkSelDate=isoDate(b.Date); bkSelTime=b.Time;
+      bkCalY=new Date(bkSelDate+'T12:00:00').getFullYear();
+      bkCalM=new Date(bkSelDate+'T12:00:00').getMonth();
+    }
+    document.getElementById('bm-title').textContent='Edit Booking';
+    document.getElementById('save-bk-btn').textContent='Update Booking';
   } else {
-    if(!document.getElementById('b-date').value){const d=new Date();d.setDate(d.getDate()+1);document.getElementById('b-date').value=d.toISOString().split('T')[0];}
-    document.getElementById('b-client').value='';document.getElementById('b-notes').value='';
+    document.getElementById('b-client').value='';
+    document.getElementById('b-maps').value='';
+    document.getElementById('b-notes').value='';
     document.getElementById('b-agent').value=CU?.role==='agent'?CU.name:'';
-    document.getElementById('bm-title').textContent='New Booking';document.getElementById('save-bk-btn').textContent='Confirm Booking';
+    document.getElementById('bm-title').textContent='New Booking';
+    document.getElementById('save-bk-btn').textContent='Confirm Booking';
   }
-  document.getElementById('avail-hint').style.display='none';
+  loadAssignments();
+  updateBkPhSection();
+  updateBkDetails();
+  renderBkCal();
+  syncBkGCal();
   document.getElementById('mo-booking').classList.add('open');
-  chkAvail();
 }
 
 async function chkAvail(){
@@ -786,40 +1245,44 @@ async function chkAvail(){
 }
 
 async function saveBk(){
-  const date=document.getElementById('b-date').value, time=document.getElementById('b-time').value,
-        typeId=document.getElementById('b-type').value, phId=document.getElementById('b-ph').value,
-        client=document.getElementById('b-client').value.trim(), agent=document.getElementById('b-agent').value.trim(),
+  const date=bkSelDate, time=bkSelTime,
+        typeId=document.getElementById('b-type').value, phIds=getBkPhIds(),
+        client=document.getElementById('b-client').value.trim(),
+        maps=document.getElementById('b-maps').value.trim(),
+        agent=document.getElementById('b-agent').value.trim(),
         notes=document.getElementById('b-notes').value.trim();
-  if(!date||!client){notify('Please fill in all required fields');return;}
+  if(!date||!time||!client){notify('Please select a date, time and enter property address');return;}
+  const primaryPhId = Array.isArray(phIds) ? phIds[0] : phIds;
   const btn=document.getElementById('save-bk-btn');
   btn.disabled=true; btn.textContent='Saving…';
   try {
-    const payload={action:'saveBooking', id:editBkId||null, date, time, typeId, phId, client, agent, notes, status:'upcoming'};
+    const payload={action:'saveBooking', id:editBkId||null, date, time, typeId, phId:primaryPhId, client, maps, agent, notes, status:'upcoming'};
     const res=await api(payload);
     if(!editBkId) {
-      const newBk={ID:res.id,Date:date,Time:time,TypeID:typeId,PhotographerID:phId,Client:client,Agent:agent,Notes:notes,Status:'upcoming',CalAdded:'FALSE'};
+      const newBk={ID:res.id,Date:date,Time:time,TypeID:typeId,PhotographerID:primaryPhId,Client:client,Maps:maps,Agent:agent,Notes:notes,Status:'upcoming',CalAdded:'FALSE'};
       D.bookings.push(newBk);
-      const m=getMember(phId);
-      if(m.Email&&accessToken){
+      if(accessToken){
         btn.textContent='Creating calendar event…';
         try {
-          console.log('Creating event for:', m.Email, 'typeId:', typeId, 'type:', getType(typeId));
-          await createCalendarEvent({date,time,typeId,client,agent,notes},m.Email);
+          const agentUser = D.users.find(u=>u.Name===agent) || null;
+          const agentEmail = agentUser?.Email || CU.email;
+          // Get all required photographer emails based on assignment mode
+          const phEmails = getBkAttendeeEmails(typeId, primaryPhId);
+          await createCalendarEvent({date,time,typeId,client,maps,agent,notes}, phEmails, agentEmail);
           await api({action:'markCalAdded',id:res.id}); newBk.CalAdded='TRUE';
-          notify('Booking confirmed — calendar invite sent to '+m.Name+' ✓',true);
+          notify('Booking confirmed — calendar invite sent ✓',true);
         } catch(calErr){
           console.error('Calendar error:', calErr);
           notify('Booking saved — calendar invite failed: '+calErr.message);
         }
       } else {
-        notify('Booking confirmed',true);
-        closeMo('mo-booking'); renderDashboard(); renderBkTable(); renderCal();
-        setTimeout(()=>openCalMo(newBk),500); return;
+        // No access token — token expired, prompt re-login
+        notify('Booking saved. Please sign out and back in to enable calendar invites.',true);
       }
       closeMo('mo-booking'); renderDashboard(); renderBkTable(); renderCal();
     } else {
       const bk=D.bookings.find(x=>String(x.ID)===String(editBkId));
-      if(bk) Object.assign(bk,{Date:date,Time:time,TypeID:typeId,PhotographerID:phId,Client:client,Agent:agent,Notes:notes});
+      if(bk) Object.assign(bk,{Date:date,Time:time,TypeID:typeId,PhotographerID:primaryPhId,Client:client,Maps:maps,Agent:agent,Notes:notes});
       notify('Booking updated',true);
       closeMo('mo-booking'); renderDashboard(); renderBkTable(); renderCal();
     }
@@ -879,7 +1342,7 @@ function renderBkTable(){
     const sb={upcoming:'rose',completed:'green',cancelled:'red'}[b.Status]||'gry';
     const calAdded = String(b.CalAdded).toUpperCase()==='TRUE';
     const calCell = b.Status==='upcoming'
-      ? `<button class="btn bsm bg" onclick="openCalMo(D.bookings.find(x=>String(x.ID)==='${b.ID}'))"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${calAdded?'Resend':'Add'}</button>`
+      ``
       : `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'—'}</span>`;
     return `<tr>
       <td style="color:var(--navy);font-weight:400">${fmtDate(b.Date)}</td>
@@ -918,8 +1381,7 @@ function openDetail(id){
   const acts=document.getElementById('det-actions');acts.innerHTML='';
   if(b.Status==='upcoming'){
     const cancelBtn=document.createElement('button');cancelBtn.className='btn bdanger';cancelBtn.textContent='Cancel Booking';cancelBtn.onclick=cancelBk;acts.appendChild(cancelBtn);
-    const calBtn=document.createElement('button');calBtn.className='btn bg';calBtn.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Calendar Links';
-    calBtn.onclick=()=>{closeMo('mo-detail');openCalMo(b);};acts.appendChild(calBtn);
+    // Calendar invites are sent automatically — no manual link button needed
   }
   const closeBtn=document.createElement('button');closeBtn.className='btn';closeBtn.textContent='Close';closeBtn.onclick=()=>closeMo('mo-detail');acts.appendChild(closeBtn);
   document.getElementById('mo-detail').classList.add('open');
@@ -1010,6 +1472,7 @@ async function saveMember(){
 
 // ══ Settings (Admin/SuperAdmin) ══════════════════════════════════════════════
 function renderSettings(){
+  loadAssignments();
   if(!isAdmin()){
     document.getElementById('settings-content').innerHTML=`<div class="adn"><div style="font-size:40px;opacity:0.3">&#128274;</div><div style="font-size:18px;font-weight:300;color:var(--navy);letter-spacing:2px;text-transform:uppercase;margin:16px 0 8px">Admin Access Only</div><div style="font-size:12px;color:var(--tl)">Settings are restricted to administrators.</div></div>`;
     return;
@@ -1044,7 +1507,7 @@ function renderSettings(){
     <div class="g2">
       <div class="card">
         <div class="ct" style="margin-bottom:16px">Booking Types</div>
-        <div>${D.bookingTypes.map(t=>`<div class="fxb" style="padding:10px 0;border-bottom:1px solid var(--light)"><div class="fx" style="gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:${colorMap[t.Color]||'#888'}"></div><span style="font-size:12px;color:var(--navy)">${t.Name}</span><span class="bdg gry">${t.Duration}h</span></div><button class="btn bsm bdanger" onclick="removeType('${t.ID}')">Remove</button></div>`).join('')}</div>
+        <div>${D.bookingTypes.map(t=>`<div style="padding:10px 0;border-bottom:1px solid var(--light)"><div class="fxb"><div class="fx" style="gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:${colorMap[t.Color]||'#888'}"></div><span style="font-size:12px;color:var(--navy)">${t.Name}</span><span class="bdg gry">${t.Duration}h</span></div><button class="btn bsm bdanger" onclick="removeType('${t.ID}')">Remove</button></div>${renderTypeAssignment(t.ID)}</div>`).join('')}</div>
         <div class="div"></div>
         <div style="font-size:10px;font-weight:500;color:var(--tl);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">Add New Type</div>
         <div class="fg"><label class="fl">Name</label><input class="fi" id="new-type-name" placeholder="e.g. Drone Photography"></div>
