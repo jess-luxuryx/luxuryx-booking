@@ -1209,16 +1209,30 @@ function renderTypeAssignment(typeId) {
     </div>`;
   }
 
+  // For exclusive mode, use radio buttons (only one can be selected)
+  const isExclusive = a.mode === 'exclusive';
+  const memberInputs = D.team.map(m => {
+    if (isExclusive) {
+      const isSelected = a.memberIds.length > 0 && String(a.memberIds[0]) === String(m.ID);
+      return `<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--navy);cursor:pointer">
+        <input type="radio" name="excl-${typeId}" ${isSelected?'checked':''} onchange="setExclusiveMember('${typeId}','${m.ID}')" style="accent-color:var(--navy)">
+        ${m.Name}
+      </label>`;
+    } else {
+      return `<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--navy);cursor:pointer">
+        <input type="checkbox" ${a.memberIds.includes(String(m.ID))?'checked':''} onchange="toggleAssignMember('${typeId}','${m.ID}',this.checked)" style="accent-color:var(--navy)">
+        ${m.Name}
+      </label>`;
+    }
+  }).join('');
+
   return `<div class="type-assign" id="assign-${typeId}" style="background:var(--offwhite);border-radius:4px;padding:12px;margin-top:8px">
     <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--tl);font-weight:500;margin-bottom:8px">Team Assignment <span class="bdg rose" style="font-size:8px;margin-left:4px">Super Admin</span></div>
     <select class="fs" style="margin-bottom:8px;font-size:11px" onchange="setAssignMode('${typeId}',this.value)">
       ${Object.entries(modeLabels).map(([v,l])=>`<option value="${v}"${a.mode===v?' selected':''}>${l}</option>`).join('')}
     </select>
     <div style="display:flex;flex-wrap:wrap;gap:6px">
-      ${D.team.map(m=>`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--navy);cursor:pointer">
-        <input type="checkbox" ${a.memberIds.includes(String(m.ID))?'checked':''} onchange="toggleAssignMember('${typeId}','${m.ID}',this.checked)" style="accent-color:var(--navy)">
-        ${m.Name}
-      </label>`).join('')}
+      ${memberInputs}
     </div>
   </div>`;
 }
@@ -1226,11 +1240,23 @@ function renderTypeAssignment(typeId) {
 function setAssignMode(typeId, mode) {
   if (!typeAssignments[typeId]) typeAssignments[typeId] = { mode, memberIds: D.team.map(m=>String(m.ID)) };
   typeAssignments[typeId].mode = mode;
+  
+  // For exclusive mode, if multiple members selected, keep only the first one
+  if (mode === 'exclusive' && typeAssignments[typeId].memberIds.length > 1) {
+    typeAssignments[typeId].memberIds = [typeAssignments[typeId].memberIds[0]];
+  }
+  
   saveAssignment(typeId).then(() => {
     notify('Assignment saved', true);
     const el = document.getElementById('assign-'+typeId);
     if (el) el.outerHTML = renderTypeAssignment(typeId);
   });
+}
+
+function setExclusiveMember(typeId, memberId) {
+  if (!typeAssignments[typeId]) typeAssignments[typeId] = { mode: 'exclusive', memberIds: [] };
+  typeAssignments[typeId].memberIds = [String(memberId)];
+  saveAssignment(typeId).then(() => notify('Assignment saved', true));
 }
 
 function toggleAssignMember(typeId, memberId, checked) {
