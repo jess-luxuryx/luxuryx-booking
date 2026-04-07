@@ -575,6 +575,24 @@ async function loadAllData() {
     D.assignments  = res.assignments   || {};
     // Sync server assignments to local cache
     typeAssignments = D.assignments;
+    
+    console.log('=== DATA LOADED ===');
+    console.log('Bookings:', D.bookings.length, D.bookings);
+    console.log('Team (raw):', D.team);
+    console.log('Team emails check:', D.team.map(m => {
+      const keys = Object.keys(m);
+      return {
+        ID: m.ID,
+        Name: m.Name,
+        Email: m.Email,
+        email: m.email,  // check lowercase variant
+        allKeys: keys
+      };
+    }));
+    console.log('BookingTypes:', D.bookingTypes);
+    console.log('Assignments:', D.assignments);
+    console.log('===================');
+    
     // Google Sheets returns time values as ISO date strings — extract HH:MM
     ['workStart','workEnd'].forEach(k => {
       const v = D.settings[k];
@@ -676,7 +694,22 @@ function renderDashboard() {
       }).join('')
     : `<div style="text-align:center;padding:30px;color:var(--tl);font-size:12px">No upcoming bookings</div>`;
 
-  document.getElementById('avail-list').innerHTML = D.team.map(m=>`
+  // Debug panel - shows team email status
+  const teamEmailStatus = D.team.map(m => {
+    const hasEmail = m.Email && m.Email.trim() !== '';
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--light);font-size:11px">
+      <span style="color:var(--navy)">${m.Name}</span>
+      <span style="color:${hasEmail ? '#1a6b3c' : '#7a1a1a'}">${hasEmail ? m.Email : '⚠ NO EMAIL'}</span>
+    </div>`;
+  }).join('');
+  
+  document.getElementById('avail-list').innerHTML = `
+    <div style="margin-bottom:16px;padding:12px;background:rgba(12,35,62,0.04);border:1px solid var(--bn);border-radius:4px">
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--tl);margin-bottom:8px;font-weight:500">📧 Team Email Status (Debug)</div>
+      ${teamEmailStatus}
+      <div style="margin-top:8px;font-size:10px;color:var(--tl)">Token: ${accessToken ? '✓ Valid' : '✗ None'}</div>
+    </div>
+  ` + D.team.map(m=>`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--light)">
       <div class="fx" style="gap:10px">
         <div style="width:34px;height:34px;border-radius:50%;background:${m.AvatarColor}20;color:${m.AvatarColor};font-size:12px;display:flex;align-items:center;justify-content:center;font-family:var(--ff)">${m.Initials||m.Name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
@@ -789,9 +822,13 @@ function bkPrevM() { if(bkCalM===0){bkCalM=11;bkCalY--;}else bkCalM--; renderBkC
 function bkNextM() { if(bkCalM===11){bkCalM=0;bkCalY++;}else bkCalM++; renderBkCal(); syncBkGCal(); }
 
 async function syncBkGCal() {
-  if (!accessToken) return;
+  if (!accessToken) {
+    console.log('syncBkGCal: No access token, skipping');
+    return;
+  }
   const typeId = document.getElementById('b-type')?.value;
   const a = getAssignment(typeId);
+  console.log('syncBkGCal:', { typeId, assignment: a });
 
   let memberIds = [];
   if (a.mode === 'all') memberIds = a.memberIds;
@@ -802,8 +839,22 @@ async function syncBkGCal() {
     if (phEl?.value) memberIds = [phEl.value];
   }
 
-  if (memberIds.length === 0) return;
+  // Fallback: if no member IDs, try to get from the b-ph dropdown or use all team members
+  if (memberIds.length === 0) {
+    const phEl = document.getElementById('b-ph');
+    if (phEl?.value) memberIds = [phEl.value];
+    else memberIds = D.team.map(m => String(m.ID));
+    console.log('syncBkGCal: Using fallback memberIds:', memberIds);
+  }
+
   const members = memberIds.map(id => D.team.find(m=>String(m.ID)===String(id))).filter(m=>m?.Email);
+  console.log('syncBkGCal: Members to fetch:', members.map(m=>({ID: m.ID, Name: m.Name, Email: m.Email})));
+  
+  if (members.length === 0) {
+    console.warn('syncBkGCal: No team members with emails found');
+    return;
+  }
+  
   await Promise.all(members.map(m => fetchGCalForMember(m.Email, bkCalY, bkCalM)));
   renderBkCal();
 }
@@ -836,16 +887,24 @@ function getTimeSlots(workStart, workEnd, dur) {
 function isSlotAvailable(phId, ds, time, dur) {
   const [h,mi] = time.split(':').map(Number);
   const slotStart = h*60+mi, slotEnd = slotStart + dur*60;
+  
+  // Check app bookings first
   const conflicts = D.bookings.filter(b=>
     String(b.PhotographerID)===String(phId) && isoDate(b.Date)===ds &&
     b.Status!=='cancelled' && String(b.ID)!==String(editBkId)
   );
+  
   for (const b of conflicts) {
     const bdur = parseInt(getType(b.TypeID)?.Duration)||2;
     const [bh,bm] = (b.Time||'09:00').split(':').map(Number);
     const bStart=bh*60+bm, bEnd=bStart+bdur*60;
-    if (slotStart<bEnd && slotEnd>bStart) return false;
+    if (slotStart<bEnd && slotEnd>bStart) {
+      console.log('Slot blocked by app booking:', {phId, ds, time, booking: b});
+      return false;
+    }
   }
+  
+  // Then check Google Calendar events
   const member = D.team.find(m=>String(m.ID)===String(phId));
   if (member?.Email) {
     const d = new Date(ds+'T12:00:00');
@@ -857,7 +916,10 @@ function isSlotAvailable(phId, ds, time, dur) {
       const [eh2,em2]=e.startTime.split(':').map(Number);
       const [eh3,em3]=e.endTime.split(':').map(Number);
       const eStart=eh2*60+em2, eEnd=eh3*60+em3;
-      if (slotStart < eEnd && slotEnd > eStart) return false;
+      if (slotStart < eEnd && slotEnd > eStart) {
+        console.log('Slot blocked by GCal event:', {phId, ds, time, event: e});
+        return false;
+      }
     }
   }
   return true;
@@ -922,6 +984,16 @@ function renderBkSlots(phId, dur) {
   const a = getAssignment(typeId);
   const slots=getTimeSlots(D.settings?.workStart||'09:00', D.settings?.workEnd||'17:00', dur);
   const dateLabel=new Date(bkSelDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  
+  console.log('renderBkSlots:', { 
+    phId, 
+    dur, 
+    bkSelDate, 
+    mode: a.mode, 
+    memberIds: a.memberIds,
+    bookingsForPh: D.bookings.filter(b=>String(b.PhotographerID)===String(phId) && isoDate(b.Date)===bkSelDate)
+  });
+  
   let html='<div class="bk-slots-title">'+dateLabel+'</div><div class="slot-grid">';
   for(const t of slots){
     // For 'all' mode check every required member, otherwise just check phId
@@ -986,6 +1058,11 @@ async function checkFreeBusy(photographerEmail, date, startTime, durationHours) 
 async function createCalendarEvent(bk, photographerEmails, agentEmail) {
   // Accept single email or array
   if (typeof photographerEmails === 'string') photographerEmails = [photographerEmails];
+  if (!photographerEmails || photographerEmails.length === 0) {
+    console.warn('No photographer emails provided for calendar event');
+    photographerEmails = [];
+  }
+  
   const t = getType(bk.typeId);
   const dur = parseInt(t?.Duration)||2;
 
@@ -1021,11 +1098,14 @@ async function createCalendarEvent(bk, photographerEmails, agentEmail) {
     reminders: { useDefault: false, overrides: [{method:'email',minutes:1440},{method:'popup',minutes:60}] }
   };
 
+  console.log('Creating calendar event:', event);
+
   const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all', {
     method:'POST', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
     body: JSON.stringify(event)
   });
   const data = await res.json();
+  console.log('Calendar API response:', data);
   if (data.error) throw new Error(data.error.message);
   return data;
 }
@@ -1088,7 +1168,52 @@ function getBkAttendeeEmails(typeId, phId) {
   if (a.mode === 'all') ids = a.memberIds;
   else if (a.mode === 'exclusive') ids = a.memberIds.slice(0,1);
   else ids = [String(phId)];
-  return ids.map(id => D.team.find(m=>String(m.ID)===String(id))?.Email).filter(Boolean);
+  
+  console.log('getBkAttendeeEmails - Looking up:', { typeId, phId, mode: a.mode, ids });
+  console.log('getBkAttendeeEmails - Team data:', D.team.map(m=>({ID: m.ID, IDType: typeof m.ID, Name: m.Name, Email: m.Email})));
+  
+  // Get emails from team members - try multiple matching strategies
+  let emails = [];
+  for (const id of ids) {
+    const idStr = String(id);
+    // Try exact string match first
+    let member = D.team.find(m => String(m.ID) === idStr);
+    // If not found, try numeric comparison (handles scientific notation issues)
+    if (!member) {
+      const idNum = Number(id);
+      member = D.team.find(m => Number(m.ID) === idNum);
+    }
+    // If still not found, try trimmed comparison
+    if (!member) {
+      member = D.team.find(m => String(m.ID).trim() === idStr.trim());
+    }
+    
+    if (member?.Email) {
+      emails.push(member.Email);
+      console.log('getBkAttendeeEmails - Found email for ID', id, ':', member.Email);
+    } else {
+      console.warn('getBkAttendeeEmails - No email found for ID:', id, 'Member:', member);
+    }
+  }
+  
+  // Fallback: if no emails found, try to get the primary photographer's email directly
+  if (emails.length === 0 && phId) {
+    const primaryMember = D.team.find(m=>String(m.ID)===String(phId)) || 
+                          D.team.find(m=>Number(m.ID)===Number(phId));
+    if (primaryMember?.Email) {
+      emails = [primaryMember.Email];
+      console.log('getBkAttendeeEmails - Using fallback email:', primaryMember.Email);
+    }
+  }
+  
+  // Second fallback: if still no emails, get ALL team member emails
+  if (emails.length === 0) {
+    emails = D.team.filter(m => m.Email).map(m => m.Email);
+    console.log('getBkAttendeeEmails - Using all team emails as fallback:', emails);
+  }
+  
+  console.log('getBkAttendeeEmails - Final result:', emails);
+  return emails;
 }
 
 // Update the photographer section in booking modal based on type
@@ -1255,28 +1380,89 @@ async function saveBk(){
   const primaryPhId = Array.isArray(phIds) ? phIds[0] : phIds;
   const btn=document.getElementById('save-bk-btn');
   btn.disabled=true; btn.textContent='Saving…';
+  
+  console.log('=== SAVING BOOKING ===');
+  console.log('Booking details:', { date, time, typeId, primaryPhId, client, agent });
+  console.log('D.bookings count:', D.bookings.length);
+  console.log('D.team:', D.team.map(m=>({ID: m.ID, IDType: typeof m.ID, Name: m.Name, Email: m.Email})));
+  
   try {
     const payload={action:'saveBooking', id:editBkId||null, date, time, typeId, phId:primaryPhId, client, maps, agent, notes, status:'upcoming'};
     const res=await api(payload);
+    console.log('API response:', res);
+    
     if(!editBkId) {
       const newBk={ID:res.id,Date:date,Time:time,TypeID:typeId,PhotographerID:primaryPhId,Client:client,Maps:maps,Agent:agent,Notes:notes,Status:'upcoming',CalAdded:'FALSE'};
       D.bookings.push(newBk);
+      console.log('New booking added to D.bookings:', newBk);
+      
+      // Check if we have a valid token, refresh if needed
       if(accessToken){
+        // Refresh token if it's older than 50 minutes
+        const tokenAge = Date.now() - (tokenIssuedAt || 0);
+        if (tokenAge > 50 * 60 * 1000) {
+          console.log('Token is stale, refreshing...');
+          btn.textContent='Refreshing session…';
+          try {
+            await new Promise((resolve, reject) => {
+              const tempCallback = tokenClient.callback;
+              tokenClient.callback = (response) => {
+                if (response.error) reject(new Error(response.error));
+                else {
+                  accessToken = response.access_token;
+                  tokenIssuedAt = Date.now();
+                  resolve();
+                }
+              };
+              tokenClient.requestAccessToken({ prompt: '' });
+              // Restore original callback after 5 seconds timeout
+              setTimeout(() => { tokenClient.callback = tempCallback; reject(new Error('Token refresh timeout')); }, 5000);
+            });
+            console.log('Token refreshed successfully');
+          } catch(refreshErr) {
+            console.warn('Token refresh failed:', refreshErr);
+            // Continue with existing token
+          }
+        }
+        
         btn.textContent='Creating calendar event…';
         try {
           const agentUser = D.users.find(u=>u.Name===agent) || null;
           const agentEmail = agentUser?.Email || CU.email;
+          console.log('Agent lookup:', { agentName: agent, agentUser, agentEmail });
+          
           // Get all required photographer emails based on assignment mode
           const phEmails = getBkAttendeeEmails(typeId, primaryPhId);
-          await createCalendarEvent({date,time,typeId,client,maps,agent,notes}, phEmails, agentEmail);
-          await api({action:'markCalAdded',id:res.id}); newBk.CalAdded='TRUE';
-          notify('Booking confirmed — calendar invite sent ✓',true);
+          console.log('Photographer emails from getBkAttendeeEmails:', phEmails);
+          
+          // If no photographer emails found, use the currently logged-in user's email as fallback
+          let finalPhEmails = phEmails.length > 0 ? phEmails : [];
+          
+          // Last resort fallback: use current user's email
+          if (finalPhEmails.length === 0 && CU?.email) {
+            finalPhEmails = [CU.email];
+            console.log('Using current user email as fallback:', CU.email);
+          }
+          
+          console.log('Final attendee emails:', { photographers: finalPhEmails, agent: agentEmail });
+          
+          if (finalPhEmails.length === 0 && !agentEmail) {
+            console.error('No emails available for calendar invite');
+            notify('Booking saved — no valid emails for calendar invite');
+          } else {
+            const calResult = await createCalendarEvent({date,time,typeId,client,maps,agent,notes}, finalPhEmails, agentEmail);
+            console.log('Calendar event created:', calResult);
+            await api({action:'markCalAdded',id:res.id}); newBk.CalAdded='TRUE';
+            notify('Booking confirmed — calendar invite sent ✓',true);
+          }
         } catch(calErr){
-          console.error('Calendar error:', calErr);
-          notify('Booking saved — calendar invite failed: '+calErr.message);
+          console.error('Calendar creation failed:', calErr);
+          console.error('Error details:', calErr.message, calErr.stack);
+          notify('Booking saved — calendar failed: '+calErr.message);
         }
       } else {
         // No access token — token expired, prompt re-login
+        console.warn('No access token available for calendar creation');
         notify('Booking saved. Please sign out and back in to enable calendar invites.',true);
       }
       closeMo('mo-booking'); renderDashboard(); renderBkTable(); renderCal();
@@ -1286,7 +1472,10 @@ async function saveBk(){
       notify('Booking updated',true);
       closeMo('mo-booking'); renderDashboard(); renderBkTable(); renderCal();
     }
-  } catch(e){err(e.message);}
+  } catch(e){
+    console.error('Save booking error:', e);
+    err(e.message);
+  }
   finally{btn.disabled=false; btn.textContent=editBkId?'Update Booking':'Confirm Booking';}
 }
 
