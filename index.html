@@ -513,11 +513,35 @@ async function api(payload) {
   return data;
 }
 
+let loadSafetyTimer = null;
 function showLoad(msg='Loading…') {
   document.getElementById('loading-text').textContent = msg;
   document.getElementById('loading-overlay').classList.add('show');
+  // Safety: auto-hide after 20 seconds no matter what so the overlay can never permanently block the UI
+  if (loadSafetyTimer) clearTimeout(loadSafetyTimer);
+  loadSafetyTimer = setTimeout(() => {
+    document.getElementById('loading-overlay').classList.remove('show');
+    console.warn('Loading overlay auto-hidden by safety timer');
+  }, 20000);
 }
-function hideLoad() { document.getElementById('loading-overlay').classList.remove('show'); }
+function hideLoad() {
+  document.getElementById('loading-overlay').classList.remove('show');
+  if (loadSafetyTimer) { clearTimeout(loadSafetyTimer); loadSafetyTimer = null; }
+}
+// Emergency escape hatch — press Escape to dismiss any stuck modal/overlay
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.mo.open').forEach(el => el.classList.remove('open'));
+    document.getElementById('loading-overlay')?.classList.remove('show');
+    if (loadSafetyTimer) { clearTimeout(loadSafetyTimer); loadSafetyTimer = null; }
+  }
+});
+// Click the dark backdrop of any modal to close it (escape hatch for stuck modals)
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.classList && e.target.classList.contains('mo') && e.target.classList.contains('open')) {
+    e.target.classList.remove('open');
+  }
+});
 function notify(msg, green=false) {
   const n = document.getElementById('notif');
   n.textContent = msg; n.className = 'notif'+(green?' g':'');
@@ -592,11 +616,28 @@ async function ensureFreshToken() {
   });
 }
 
-// Refresh token every 45 minutes (tokens last 1 hour)
-setInterval(refreshTokenSilently, 45 * 60 * 1000);
-
 // Also refresh before any API call if token is stale
 let tokenIssuedAt = null;
+let refreshIntervalId = null;
+// Start the silent refresh interval ONLY after a successful login so the clock aligns
+// with the actual token lifetime instead of page-load time (which caused refresh to fire
+// unexpectedly a few minutes after login if the tab had been open for a while).
+function startTokenRefreshInterval() {
+  if (refreshIntervalId) clearInterval(refreshIntervalId);
+  refreshIntervalId = setInterval(refreshTokenSilently, 45 * 60 * 1000);
+}
+
+// When the user switches back to this tab, clear any stuck overlays.
+// (If a modal or loading overlay got stuck while the tab was in the background, this unsticks it.)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    // Only clear the loading overlay if it's been showing for more than 10s
+    const ov = document.getElementById('loading-overlay');
+    if (ov && ov.classList.contains('show') && loadSafetyTimer === null) {
+      ov.classList.remove('show');
+    }
+  }
+});
 
 function signInWithGoogle() {
   const urlInput = document.getElementById('lin-api-url');
@@ -677,6 +718,7 @@ async function handleTokenResponse(response) {
     localStorage.setItem('lx_user', JSON.stringify(CU));
     await loadAllData();
     launchApp();
+    startTokenRefreshInterval();
 
   } catch(e) {
     console.error('Login error:', e);
@@ -736,6 +778,7 @@ function launchApp() {
 function doLogout() {
   CU = null; accessToken = null;
   localStorage.removeItem('lx_user');
+  if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
   if (typeof google !== 'undefined') google.accounts.oauth2.revoke(accessToken||'', ()=>{});
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.remove('show');
@@ -752,6 +795,7 @@ window.addEventListener('load', async () => {
       CU = JSON.parse(savedUserJson);
       await loadAllData();
       launchApp();
+      startTokenRefreshInterval();
     } catch(e) {
       console.error('Session restore failed:', e);
       CU = null;
