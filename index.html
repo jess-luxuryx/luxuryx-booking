@@ -318,9 +318,8 @@ tr:hover td{background:rgba(12,35,62,0.02)}
   <div class="hdr">
     <img class="hlogo" id="hlogo" alt="LUXURYX AGENTS">
     <div class="hnav">
-      <button class="nb on" onclick="goPage('dashboard')" id="nav-dashboard">Dashboard</button>
+      <button class="nb on" onclick="goPage('bookings')" id="nav-bookings">Bookings</button>
       <button class="nb" onclick="goPage('calendar')" id="nav-calendar">Calendar</button>
-      <button class="nb" onclick="goPage('bookings')" id="nav-bookings">Bookings</button>
       <button class="nb" onclick="goPage('team')" id="nav-team">Team</button>
       <button class="nb" onclick="goPage('settings')" id="nav-settings">Settings</button>
     </div>
@@ -334,16 +333,6 @@ tr:hover td{background:rgba(12,35,62,0.02)}
   </div>
 
   <div class="main">
-
-    <!-- DASHBOARD -->
-    <div class="page on" id="page-dashboard">
-      <div class="ptitle">Overview</div><div class="psub">Booking Management</div><div class="rrule"></div>
-      <div class="g4" style="margin-bottom:22px" id="stats-grid"></div>
-      <div class="g2">
-        <div class="card"><div class="ch"><div class="ct">Upcoming Bookings</div><button class="btn br bsm" onclick="openBkModal()">+ New Booking</button></div><div id="upcoming-list"></div></div>
-        <div class="card"><div class="ch"><div class="ct">Team Availability</div><span class="bdg gry">Today</span></div><div id="avail-list"></div></div>
-      </div>
-    </div>
 
     <!-- CALENDAR -->
     <div class="page" id="page-calendar">
@@ -368,8 +357,8 @@ tr:hover td{background:rgba(12,35,62,0.02)}
       </div>
     </div>
 
-    <!-- BOOKINGS -->
-    <div class="page" id="page-bookings">
+    <!-- BOOKINGS (landing page) -->
+    <div class="page on" id="page-bookings">
       <div class="fxb" style="margin-bottom:24px">
         <div><div class="ptitle">Bookings</div><div class="psub">All Scheduled Sessions</div><div class="rrule" style="margin-bottom:0"></div></div>
         <button class="btn br" onclick="openBkModal()">+ New Booking</button>
@@ -683,7 +672,7 @@ function launchApp() {
   document.getElementById('uav').textContent = ini;
   document.getElementById('uname').textContent = CU.name;
   document.getElementById('urole').textContent = ({superadmin:'Super Admin',admin:'Admin',agent:'Agent',photographer:'Photographer'})[CU.role]||CU.role;
-  renderDashboard();
+  goPage('bookings');
 }
 
 function doLogout() {
@@ -788,48 +777,15 @@ function goPage(p) {
   document.getElementById('page-'+p).classList.add('on');
   document.getElementById('nav-'+p).classList.add('on');
   if(p==='calendar') renderCal();
-  if(p==='dashboard') renderDashboard();
   if(p==='bookings') renderBkTable();
   if(p==='team') renderTeam();
   if(p==='settings') renderSettings();
 }
 
-// ══ Dashboard ════════════════════════════════════════════════════════════════
+// ══ Dashboard removed — bookings is now the landing page ═════════════════
+// Stub kept so legacy callers don't throw; refreshes the bookings table instead.
 function renderDashboard() {
-  const up = D.bookings.filter(b=>b.Status==='upcoming');
-  document.getElementById('stats-grid').innerHTML =
-    `<div class="scard"><div class="slabel">Total Bookings</div><div class="sval">${D.bookings.length}</div><div class="ssub">All time</div></div>
-     <div class="scard"><div class="slabel">Upcoming</div><div class="sval">${up.length}</div><div class="ssub">Scheduled</div></div>
-     <div class="scard"><div class="slabel">Team Members</div><div class="sval">${D.team.length}</div><div class="ssub">${D.team.filter(m=>m.Status==='available').length} available</div></div>
-     <div class="scard"><div class="slabel">Booking Types</div><div class="sval">${D.bookingTypes.length}</div><div class="ssub">Configured</div></div>`;
-
-  let list = [...up].sort((a,b)=>String(a.Date).localeCompare(String(b.Date)));
-  if(CU?.role==='photographer') list = list.filter(b=>getMember(b.PhotographerID).Name===CU.name);
-
-  document.getElementById('upcoming-list').innerHTML = list.length
-    ? list.slice(0,5).map(b=>{
-        const t=getType(b.TypeID), m=getMember(b.PhotographerID);
-        return `<div onclick="openDetail('${b.ID}')" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--light);cursor:pointer">
-          <div style="width:36px;height:36px;border-radius:3px;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e3a48a" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;color:var(--navy);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.Client}</div>
-            <div style="font-size:10px;color:var(--tl);margin-top:2px">${fmtDate(b.Date)} · ${fmtTime(b.Time)} · ${m.Name}</div>
-          </div>
-          <span class="bdg rose" style="white-space:nowrap">${t.Name}</span>
-        </div>`;
-      }).join('')
-    : `<div style="text-align:center;padding:30px;color:var(--tl);font-size:12px">No upcoming bookings</div>`;
-
-  document.getElementById('avail-list').innerHTML = D.team.map(m=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--light)">
-      <div class="fx" style="gap:10px">
-        <div style="width:34px;height:34px;border-radius:50%;background:${m.AvatarColor}20;color:${m.AvatarColor};font-size:12px;display:flex;align-items:center;justify-content:center;font-family:var(--ff)">${m.Initials||m.Name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
-        <div><div style="font-size:12px;color:var(--navy);font-weight:500">${m.Name}</div><div style="font-size:10px;color:var(--tl)">${m.Role}</div></div>
-      </div>
-      <span class="bdg ${m.Status==='available'?'green':'red'}"><span class="adot ${m.Status}"></span>${m.Status}</span>
-    </div>`).join('');
+  if (document.getElementById('bk-tbody')) renderBkTable();
 }
 
 // ══ Calendar ════════════════════════════════════════════════════════════════
