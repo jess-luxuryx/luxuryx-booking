@@ -538,10 +538,58 @@ function initGoogleAuth() {
   });
 }
 
-// Silently refresh the access token before it expires
+// Silently refresh the access token before it expires.
+// IMPORTANT: This uses a temporary one-shot callback so it ONLY updates the access token.
+// The default handleTokenResponse callback does a full login flow (fetch user info, call
+// loginGoogle, reload all data, launchApp) which would corrupt app state mid-session.
 function refreshTokenSilently() {
   if (!tokenClient || !CU) return;
-  tokenClient.requestAccessToken({ prompt: '' }); // prompt='' means silent refresh
+  const origCallback = tokenClient.callback;
+  tokenClient.callback = (response) => {
+    tokenClient.callback = origCallback; // restore normal callback
+    if (response && !response.error && response.access_token) {
+      accessToken = response.access_token;
+      tokenIssuedAt = Date.now();
+      console.log('Access token refreshed silently');
+    } else {
+      console.warn('Silent token refresh failed (Calendar features may be unavailable until re-sign-in)');
+    }
+  };
+  try {
+    tokenClient.requestAccessToken({ prompt: '' });
+  } catch(e) {
+    tokenClient.callback = origCallback;
+    console.warn('Silent refresh threw:', e);
+  }
+}
+
+// Ensure we have a fresh access token before making Calendar API calls.
+// Returns a promise that resolves to true if we now have a usable token, false otherwise.
+async function ensureFreshToken() {
+  if (!tokenClient || !CU) return !!accessToken;
+  // Consider the token stale if it's older than 50 minutes (Google tokens last 60)
+  const tokenAge = Date.now() - (tokenIssuedAt || 0);
+  if (accessToken && tokenAge < 50 * 60 * 1000) return true;
+  return new Promise((resolve) => {
+    const origCallback = tokenClient.callback;
+    let done = false;
+    const finish = (ok) => { if (done) return; done = true; tokenClient.callback = origCallback; resolve(ok); };
+    tokenClient.callback = (response) => {
+      if (response && !response.error && response.access_token) {
+        accessToken = response.access_token;
+        tokenIssuedAt = Date.now();
+        finish(true);
+      } else {
+        finish(false);
+      }
+    };
+    try {
+      tokenClient.requestAccessToken({ prompt: '' });
+      setTimeout(() => finish(!!accessToken), 4000); // safety timeout
+    } catch(e) {
+      finish(!!accessToken);
+    }
+  });
 }
 
 // Refresh token every 45 minutes (tokens last 1 hour)
@@ -626,7 +674,7 @@ async function handleTokenResponse(response) {
     }
 
     CU = res.user;
-    sessionStorage.setItem('lx_user', JSON.stringify(CU));
+    localStorage.setItem('lx_user', JSON.stringify(CU));
     await loadAllData();
     launchApp();
 
@@ -687,54 +735,61 @@ function launchApp() {
 
 function doLogout() {
   CU = null; accessToken = null;
-  sessionStorage.removeItem('lx_user');
+  localStorage.removeItem('lx_user');
   if (typeof google !== 'undefined') google.accounts.oauth2.revoke(accessToken||'', ()=>{});
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.remove('show');
 }
 
-// Init Google auth once GSI library loads, and attempt silent session restore on refresh
-window.addEventListener('load', () => {
-  const savedUser = sessionStorage.getItem('lx_user');
+// Init Google auth once GSI library loads, and restore session immediately on refresh
+window.addEventListener('load', async () => {
+  const savedUserJson = localStorage.getItem('lx_user');
 
-  function attemptSilentAuth() {
-    if (!savedUser) return; // No saved session — user must sign in manually
+  // 1) If we have a saved session, launch the app IMMEDIATELY from cached user info
+  //    — don't wait for Google silent auth, don't kick the user back to login.
+  if (savedUserJson) {
     try {
-      CU = JSON.parse(savedUser);
-      // Temporarily replace callback for silent token refresh
-      tokenClient.callback = async (response) => {
-        tokenClient.callback = handleTokenResponse; // Restore normal callback
-        if (response.error) {
-          // Silent refresh failed — clear stale session and show login screen
-          CU = null;
-          sessionStorage.removeItem('lx_user');
-          return;
-        }
-        accessToken = response.access_token;
-        tokenIssuedAt = Date.now();
-        try {
-          await loadAllData();
-          launchApp();
-        } catch(e) {
-          CU = null;
-          sessionStorage.removeItem('lx_user');
-        }
-      };
-      tokenClient.requestAccessToken({ prompt: '' }); // Silent — no popup
+      CU = JSON.parse(savedUserJson);
+      await loadAllData();
+      launchApp();
     } catch(e) {
-      sessionStorage.removeItem('lx_user');
+      console.error('Session restore failed:', e);
+      CU = null;
+      localStorage.removeItem('lx_user');
+    }
+  }
+
+  // 2) Initialise Google auth (for new sign-ins and background token refresh)
+  function initThenRefresh() {
+    initGoogleAuth();
+    // If we have a restored session, try to silently refresh the OAuth token in the
+    // background so Google Calendar features work. If this fails, we do NOT kick the
+    // user back to the login screen — they can still view/manage bookings via the API.
+    if (CU) {
+      try {
+        const origCallback = handleTokenResponse;
+        tokenClient.callback = (response) => {
+          tokenClient.callback = origCallback;
+          if (response && !response.error && response.access_token) {
+            accessToken = response.access_token;
+            tokenIssuedAt = Date.now();
+            console.log('Silent token refresh succeeded');
+          } else {
+            console.warn('Silent token refresh failed — Calendar features may be unavailable until re-sign-in');
+          }
+        };
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch(e) {
+        console.warn('Silent auth setup failed:', e);
+      }
     }
   }
 
   if (typeof google !== 'undefined' && google.accounts) {
-    initGoogleAuth();
-    attemptSilentAuth();
+    initThenRefresh();
   } else {
     const script = document.querySelector('script[src*="accounts.google.com"]');
-    if (script) script.addEventListener('load', () => {
-      initGoogleAuth();
-      attemptSilentAuth();
-    });
+    if (script) script.addEventListener('load', initThenRefresh);
   }
 });
 
@@ -1395,50 +1450,65 @@ function toggleAssignMember(typeId, memberId, checked) {
 }
 
 function openBkModal(id=null) {
-  // Only admins can edit existing bookings — agents can only create new ones
-  if (id && !isAdmin()) {
-    notify('Only admins can edit existing bookings. Please contact an admin if changes are needed.');
-    return;
-  }
-  editBkId=id;
-  bkCalY=TODAY.getFullYear(); bkCalM=TODAY.getMonth();
-  bkSelDate=null; bkSelTime=null;
-  document.getElementById('b-type').innerHTML=D.bookingTypes.map(t=>`<option value="${t.ID}">${t.Name} (${t.Duration}h)</option>`).join('');
-  document.getElementById('b-ph').innerHTML=D.team.map(m=>`<option value="${m.ID}">${m.Name}</option>`).join('');
-  if(CU?.role==='photographer'){
-    const me=D.team.find(m=>m.Name===CU.name);
-    if(me) document.getElementById('b-ph').value=me.ID;
-    document.getElementById('b-ph').disabled=true;
-  } else { document.getElementById('b-ph').disabled=false; }
-  if(id){
-    const b=D.bookings.find(x=>String(x.ID)===String(id));
-    if(b){
-      document.getElementById('b-type').value=b.TypeID;
-      document.getElementById('b-ph').value=b.PhotographerID;
-      document.getElementById('b-client').value=b.Client;
-      document.getElementById('b-maps').value=b.Maps||'';
-      document.getElementById('b-agent').value=b.Agent||'';
-      document.getElementById('b-notes').value=b.Notes||'';
-      bkSelDate=isoDate(b.Date); bkSelTime=fmtTime(b.Time);
-      bkCalY=new Date(bkSelDate+'T12:00:00').getFullYear();
-      bkCalM=new Date(bkSelDate+'T12:00:00').getMonth();
+  try {
+    // Only admins can edit existing bookings — agents can only create new ones
+    if (id && !isAdmin()) {
+      notify('Only admins can edit existing bookings. Please contact an admin if changes are needed.');
+      return;
     }
-    document.getElementById('bm-title').textContent='Edit Booking';
-    document.getElementById('save-bk-btn').textContent='Update Booking';
-  } else {
-    document.getElementById('b-client').value='';
-    document.getElementById('b-maps').value='';
-    document.getElementById('b-notes').value='';
-    document.getElementById('b-agent').value=CU?.role==='agent'?CU.name:'';
-    document.getElementById('bm-title').textContent='New Booking';
-    document.getElementById('save-bk-btn').textContent='Confirm Booking';
+
+    // Guard: if data hasn't loaded yet, don't break — reload and retry
+    if (!D.bookingTypes || D.bookingTypes.length === 0 || !D.team || D.team.length === 0) {
+      notify('Loading booking data, please try again in a moment…');
+      loadAllData().catch(e => console.error('loadAllData failed:', e));
+      return;
+    }
+
+    editBkId=id;
+    bkCalY=TODAY.getFullYear(); bkCalM=TODAY.getMonth();
+    bkSelDate=null; bkSelTime=null;
+    document.getElementById('b-type').innerHTML=D.bookingTypes.map(t=>`<option value="${t.ID}">${t.Name} (${t.Duration}h)</option>`).join('');
+    document.getElementById('b-ph').innerHTML=D.team.map(m=>`<option value="${m.ID}">${m.Name}</option>`).join('');
+    if(CU?.role==='photographer'){
+      const me=D.team.find(m=>m.Name===CU.name);
+      if(me) document.getElementById('b-ph').value=me.ID;
+      document.getElementById('b-ph').disabled=true;
+    } else { document.getElementById('b-ph').disabled=false; }
+    if(id){
+      const b=D.bookings.find(x=>String(x.ID)===String(id));
+      if(b){
+        document.getElementById('b-type').value=b.TypeID;
+        document.getElementById('b-ph').value=b.PhotographerID;
+        document.getElementById('b-client').value=b.Client;
+        document.getElementById('b-maps').value=b.Maps||'';
+        document.getElementById('b-agent').value=b.Agent||'';
+        document.getElementById('b-notes').value=b.Notes||'';
+        bkSelDate=isoDate(b.Date); bkSelTime=fmtTime(b.Time);
+        bkCalY=new Date(bkSelDate+'T12:00:00').getFullYear();
+        bkCalM=new Date(bkSelDate+'T12:00:00').getMonth();
+      }
+      document.getElementById('bm-title').textContent='Edit Booking';
+      document.getElementById('save-bk-btn').textContent='Update Booking';
+    } else {
+      document.getElementById('b-client').value='';
+      document.getElementById('b-maps').value='';
+      document.getElementById('b-notes').value='';
+      document.getElementById('b-agent').value=CU?.role==='agent'?CU.name:'';
+      document.getElementById('bm-title').textContent='New Booking';
+      document.getElementById('save-bk-btn').textContent='Confirm Booking';
+    }
+    loadAssignments();
+    updateBkPhSection();
+    updateBkDetails();
+    renderBkCal();
+    // syncBkGCal is async and may fail on an expired token — don't let it block the modal
+    try { syncBkGCal().catch(e => console.warn('syncBkGCal failed:', e)); }
+    catch(e) { console.warn('syncBkGCal threw:', e); }
+    document.getElementById('mo-booking').classList.add('open');
+  } catch(e) {
+    console.error('openBkModal failed:', e);
+    notify('Could not open booking form: ' + (e.message || 'unknown error'));
   }
-  loadAssignments();
-  updateBkPhSection();
-  updateBkDetails();
-  renderBkCal();
-  syncBkGCal();
-  document.getElementById('mo-booking').classList.add('open');
 }
 
 async function chkAvail(){
@@ -1525,10 +1595,16 @@ async function saveBk(){
             notify('Booking saved — no valid emails for calendar invite');
           } else {
             const calEvent = await createCalendarEvent({date,time,typeId,client,maps,agent,notes}, finalPhEmails, agentEmail);
-            // Save both CalAdded status and the event ID for future cancellation
-            await api({action:'markCalAdded', id:res.id, calEventId: calEvent.id});
+            // Mark locally as sent immediately — even if the backend markCalAdded call fails,
+            // the calendar event itself succeeded, so the UI should reflect that.
             newBk.CalAdded='TRUE';
             newBk.CalEventId = calEvent.id;
+            // Persist to sheet in the background — don't let a backend hiccup mark the invite as "not sent"
+            try {
+              await api({action:'markCalAdded', id:res.id, calEventId: calEvent.id});
+            } catch(persistErr) {
+              console.warn('markCalAdded backend call failed, but calendar event was created:', persistErr);
+            }
             notify('Booking confirmed — calendar invite sent ✓',true);
           }
         } catch(calErr){
@@ -1601,9 +1677,13 @@ function renderBkTable(){
   bks.sort((a,b)=>String(b.Date).localeCompare(String(a.Date)));
   document.getElementById('bk-tbody').innerHTML = bks.length ? bks.map(b=>{
     const t=getType(b.TypeID), m=getMember(b.PhotographerID);
-    const sb={upcoming:'rose',completed:'green',cancelled:'red'}[b.Status]||'gry';
-    const calAdded = String(b.CalAdded).toUpperCase()==='TRUE';
-    const calCell = b.Status==='upcoming'
+    // Normalize status — anything that isn't a known state falls back to 'upcoming'
+    const rawStatus = String(b.Status||'').toLowerCase().trim();
+    const normStatus = ['upcoming','completed','cancelled'].includes(rawStatus) ? rawStatus : 'upcoming';
+    const sb={upcoming:'rose',completed:'green',cancelled:'red'}[normStatus]||'gry';
+    // Calendar is considered "sent" if CalAdded flag is TRUE OR we have a stored event id
+    const calAdded = String(b.CalAdded).toUpperCase()==='TRUE' || !!(b.CalEventId && String(b.CalEventId).trim());
+    const calCell = normStatus==='upcoming'
       ? `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'Pending'}</span>`
       : `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'—'}</span>`;
     return `<tr>
@@ -1612,11 +1692,11 @@ function renderBkTable(){
       <td>${m.Name}</td>
       <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.Client}</td>
       <td>${fmtTime(b.Time)}</td>
-      <td><span class="bdg ${sb}">${b.Status}</span></td>
+      <td><span class="bdg ${sb}">${normStatus}</span></td>
       <td>${calCell}</td>
       <td><div class="fx" style="gap:5px">
         <button class="btn bsm" onclick="openDetail('${b.ID}')">View</button>
-        ${b.Status==='upcoming' && isAdmin() ?`<button class="btn bsm" onclick="openBkModal('${b.ID}')">Edit</button>`:''}
+        ${normStatus==='upcoming' && isAdmin() ?`<button class="btn bsm" onclick="openBkModal('${b.ID}')">Edit</button>`:''}
       </div></td>
     </tr>`;
   }).join('') : `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tl);font-size:12px">No bookings found</td></tr>`;
@@ -1627,7 +1707,9 @@ function openDetail(id){
   viewBkId=id;
   const b=D.bookings.find(x=>String(x.ID)===String(id));if(!b)return;
   const t=getType(b.TypeID),m=getMember(b.PhotographerID);
-  const calAdded=String(b.CalAdded).toUpperCase()==='TRUE';
+  const rawStatus = String(b.Status||'').toLowerCase().trim();
+  const normStatus = ['upcoming','completed','cancelled'].includes(rawStatus) ? rawStatus : 'upcoming';
+  const calAdded=String(b.CalAdded).toUpperCase()==='TRUE' || !!(b.CalEventId && String(b.CalEventId).trim());
   document.getElementById('det-title').textContent=b.Client;
   document.getElementById('det-date').textContent=fmtDate(b.Date)+' at '+fmtTime(b.Time);
   document.getElementById('det-body').innerHTML=`
@@ -1636,12 +1718,12 @@ function openDetail(id){
       <div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Photographer</div><div style="font-size:13px;color:var(--navy);font-weight:400">${m.Name}</div></div>
       <div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Duration</div><div style="font-size:13px;color:var(--navy);font-weight:400">${t.Duration} hours</div></div>
       <div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Agent</div><div style="font-size:13px;color:var(--navy);font-weight:400">${b.Agent||'—'}</div></div>
-      <div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Status</div><span class="bdg ${{upcoming:'rose',completed:'green',cancelled:'red'}[b.Status]||'gry'}">${b.Status}</span></div>
+      <div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Status</div><span class="bdg ${{upcoming:'rose',completed:'green',cancelled:'red'}[normStatus]||'gry'}">${normStatus}</span></div>
       <div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Calendar</div><span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'Not Sent'}</span></div>
     </div>
     ${b.Notes?`<div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Notes</div><div style="font-size:12px;color:var(--tm)">${b.Notes}</div></div>`:''}`;
   const acts=document.getElementById('det-actions');acts.innerHTML='';
-  if(b.Status==='upcoming' && isAdmin()){
+  if(normStatus==='upcoming' && isAdmin()){
     const cancelBtn=document.createElement('button');cancelBtn.className='btn bdanger';cancelBtn.textContent='Cancel Booking';cancelBtn.onclick=cancelBk;acts.appendChild(cancelBtn);
   }
   // Delete button for admins - permanently removes booking
@@ -1710,28 +1792,31 @@ async function cancelBk(){
   if(!viewBkId)return;
   const b = D.bookings.find(x=>String(x.ID)===String(viewBkId));
   if(!b) return;
-  
+
+  // Refresh token first
+  const tokenOk = await ensureFreshToken();
+
   try {
     // Cancel in database first
     await api({action:'cancelBooking', id:viewBkId});
     b.Status='cancelled';
-    
-    // Then try to delete the calendar event if it exists
+
+    // Then try to delete the calendar event — always try the fallback search too
     let calDeleted = false;
-    if (accessToken) {
+    if (tokenOk && accessToken) {
       if (b.CalEventId) {
         calDeleted = await deleteCalendarEvent(b.CalEventId);
       }
-      if (!calDeleted && String(b.CalAdded).toUpperCase() === 'TRUE') {
+      if (!calDeleted) {
         calDeleted = await findAndDeleteMatchingCalEvent(b);
       }
     }
     if (calDeleted) {
       notify('Booking cancelled — calendar event removed ✓', true);
-    } else if (String(b.CalAdded).toUpperCase() === 'TRUE') {
-      notify('Booking cancelled — calendar event could not be removed automatically');
+    } else if (tokenOk) {
+      notify('Booking cancelled — no matching calendar event found');
     } else {
-      notify('Booking cancelled');
+      notify('Booking cancelled — please sign in again to remove calendar event');
     }
     
     closeMo('mo-detail');
@@ -1748,18 +1833,23 @@ async function deleteBk(){
   const b = D.bookings.find(x=>String(x.ID)===String(viewBkId));
   if(!b) return;
 
+  // Refresh the OAuth token first so Calendar API calls actually work
+  const tokenOk = await ensureFreshToken();
+
   let calDeleted = false;
   let calAttempted = false;
 
   try {
     // 1) Try to delete the calendar event using the stored event ID
-    if (accessToken) {
+    if (tokenOk && accessToken) {
       if (b.CalEventId) {
         calAttempted = true;
         calDeleted = await deleteCalendarEvent(b.CalEventId);
       }
-      // 2) Fallback: if no CalEventId or deletion failed, search by client name and date
-      if (!calDeleted && String(b.CalAdded).toUpperCase() === 'TRUE') {
+      // 2) Always try the fallback search — it catches legacy bookings, bookings
+      //    where the backend didn't persist CalEventId, and cases where the stored
+      //    ID pointed to an event that was already deleted
+      if (!calDeleted) {
         calAttempted = true;
         calDeleted = await findAndDeleteMatchingCalEvent(b);
       }
@@ -1772,10 +1862,12 @@ async function deleteBk(){
     D.bookings = D.bookings.filter(x=>String(x.ID)!==String(viewBkId));
 
     // 5) Feedback
-    if (calAttempted && calDeleted) {
+    if (calDeleted) {
       notify('Booking deleted — calendar event removed ✓', true);
-    } else if (calAttempted && !calDeleted) {
-      notify('Booking deleted — calendar event could not be removed automatically');
+    } else if (calAttempted) {
+      notify('Booking deleted — calendar event not found (may already be gone)');
+    } else if (!tokenOk) {
+      notify('Booking deleted — please sign in again to remove calendar event');
     } else {
       notify('Booking permanently deleted', true);
     }
