@@ -941,7 +941,7 @@ function getTimeSlots(workStart, workEnd, dur) {
   const [sh,sm] = ws.split(':').map(Number);
   const [eh,em] = we.split(':').map(Number);
   const startMins = sh*60+sm, endMins = eh*60+em;
-  for (let m = startMins; m + dur*60 <= endMins; m += 30)
+  for (let m = startMins; m + dur*60 <= endMins; m += 60)
     slots.push(String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'));
   return slots;
 }
