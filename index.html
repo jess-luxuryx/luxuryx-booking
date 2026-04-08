@@ -163,7 +163,93 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .cal-link:hover{border-color:var(--rose)}
 .setup-banner{background:rgba(227,164,138,0.12);border:1px solid rgba(227,164,138,0.3);border-radius:6px;padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--td);line-height:1.8}
 .setup-banner strong{color:var(--navy);font-weight:500}
-@media(max-width:700px){.g4,.g3,.g2{grid-template-columns:1fr}.fr{grid-template-columns:1fr}.hnav .nb{font-size:9px;padding:6px 8px;letter-spacing:1px}}
+/* ── Mobile / tablet (≤768px) ───────────────────────────────────────── */
+@media(max-width:768px){
+  /* Layout */
+  .main{padding:14px}
+  .ptitle{font-size:20px;letter-spacing:1px}
+  .psub{font-size:9px;letter-spacing:2px}
+  .rrule{margin:8px 0 18px}
+
+  /* Header — wraps to two rows, nav becomes horizontal scroll strip */
+  .hdr{padding:8px 12px;height:auto;min-height:56px;flex-wrap:wrap;gap:6px;position:sticky;top:0}
+  .hlogo{height:34px}
+  .hnav{order:3;width:100%;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;margin-top:4px}
+  .hnav::-webkit-scrollbar{display:none}
+  .hnav .nb{font-size:9px;padding:6px 10px;letter-spacing:1px;white-space:nowrap;flex-shrink:0}
+  .hright{gap:6px}
+  .upill{padding:3px 10px 3px 3px}
+  .uav{width:24px;height:24px;font-size:9px}
+  .uname{font-size:10px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .urole{font-size:8px;letter-spacing:1px}
+  .signout{padding:5px 8px;font-size:9px;letter-spacing:1px}
+
+  /* Grids → single column */
+  .g4,.g3,.g2{grid-template-columns:1fr;gap:12px}
+  .fr{grid-template-columns:1fr}
+
+  /* Cards */
+  .card{padding:16px}
+  .ch{flex-wrap:wrap;gap:10px;margin-bottom:14px}
+
+  /* Page headers with button (stacks vertically) */
+  .fxb{flex-direction:column;align-items:stretch;gap:14px}
+  .fxb > .fx{flex-wrap:wrap;width:100%}
+
+  /* Modals — full-screen on mobile */
+  .mo{align-items:flex-start;padding:0}
+  .md{border-radius:0;padding:22px 16px;max-width:100%;max-height:100vh;min-height:100vh;width:100vw}
+  .mt2{font-size:15px;letter-spacing:1.5px}
+  .ms{margin-bottom:16px}
+  .mact{flex-direction:column-reverse;gap:8px;padding-top:14px}
+  .mact .btn{width:100%;justify-content:center;padding:12px 18px}
+
+  /* Bookings table — keep scrollable with comfortable min-width */
+  .page#page-bookings table{min-width:720px}
+
+  /* Booking modal — calendar stacks over slot list */
+  .bk-top{grid-template-columns:1fr;gap:10px}
+  .bk-middle{grid-template-columns:1fr;min-height:auto}
+  .bk-cal-wrap{border-right:none;border-bottom:1px solid var(--bn);padding:14px}
+  .bk-slots-wrap{padding:14px;max-height:300px}
+  .bk-day{font-size:12px}
+
+  /* Main calendar — tighter cells */
+  .cday{min-height:56px;padding:4px}
+  .dnum{font-size:10px}
+  .dev{font-size:8px;padding:1px 3px}
+  .calh{padding:10px 12px}
+  .calt{font-size:11px;letter-spacing:2px}
+
+  /* Tabs — horizontal scroll on overflow */
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap;flex-shrink:0;padding:10px 12px}
+
+  /* Notifications span full width */
+  .notif{left:16px;right:16px;bottom:16px;max-width:none}
+
+  /* Login screen */
+  .lbox{padding:36px 24px;margin:16px;border-radius:6px}
+
+  /* Make buttons easier to tap */
+  .btn{padding:10px 16px}
+  .bsm{padding:8px 12px;font-size:10px}
+}
+
+/* ── Small phones (≤480px) ──────────────────────────────────────────── */
+@media(max-width:480px){
+  .hlogo{height:30px}
+  .uname,.urole{display:none}
+  .upill{padding:3px}
+  .ptitle{font-size:17px}
+  .cday{min-height:46px}
+  .dev{font-size:7px}
+  .main{padding:12px 10px}
+  .card{padding:14px}
+  .lbox{padding:28px 20px;margin:12px}
+  .md{padding:18px 12px}
+}
 
 /* ── Calendly-style booking ───────────────────────────────────────────── */
 .bk-flow{display:flex;flex-direction:column;gap:0}
@@ -193,7 +279,7 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .slot-busy-lbl{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--tl);margin-top:2px}
 .bk-details{border-top:1px solid var(--bn);margin-top:16px;padding-top:16px}
 .bk-empty-msg{color:var(--tl);font-size:12px;text-align:center;padding:40px 20px;line-height:1.8}
-@media(max-width:600px){.bk-middle{grid-template-columns:1fr}.bk-cal-wrap{border-right:none;border-bottom:1px solid var(--bn)}.bk-top{grid-template-columns:1fr}}
+/* Booking modal breakpoint (covered by ≤768px block above) */
 </style>
 </head>
 <body>
@@ -331,9 +417,9 @@ tr:hover td{background:rgba(12,35,62,0.02)}
         </div>
       </div>
       <div class="bk-details" id="bk-details" style="display:none">
-        <div class="fg"><label class="fl">Property Address</label><input class="fi" type="text" id="b-client" placeholder="e.g. Villa 12, Palm Jumeirah, Dubai"></div>
-        <div class="fg"><label class="fl">Google Maps Pin</label><input class="fi" type="url" id="b-maps" placeholder="https://maps.app.goo.gl/..."></div>
-        <div class="fg"><label class="fl">Agent Name</label><input class="fi" type="text" id="b-agent" placeholder="Agent responsible for this booking"></div>
+        <div class="fg"><label class="fl">Property Address *</label><input class="fi" type="text" id="b-client" placeholder="e.g. Villa 12, Palm Jumeirah, Dubai" oninput="updateBkDetails()"></div>
+        <div class="fg"><label class="fl">Google Maps Pin *</label><input class="fi" type="url" id="b-maps" placeholder="https://maps.app.goo.gl/..." oninput="updateBkDetails()"></div>
+        <div class="fg"><label class="fl">Agent Name *</label><input class="fi" type="text" id="b-agent" placeholder="Agent responsible for this booking" oninput="updateBkDetails()"></div>
         <div class="fg" style="margin-bottom:0"><label class="fl">Notes</label><input class="fi" type="text" id="b-notes" placeholder="Access codes, special requirements..."></div>
       </div>
     </div>
@@ -576,14 +662,15 @@ async function loadAllData() {
     // Sync server assignments to local cache
     typeAssignments = D.assignments;
     
-    // Google Sheets returns time values as ISO date strings — extract HH:MM
+    // Google Sheets returns time values as ISO date strings — convert UTC → Dubai (UTC+4)
     ['workStart','workEnd'].forEach(k => {
       const v = D.settings[k];
       if (v && v.includes('T')) {
         const d = new Date(v);
-        const h = String(d.getUTCHours()).padStart(2,'0');
-        const m = String(d.getUTCMinutes()).padStart(2,'0');
-        D.settings[k] = h + ':' + m;
+        const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240; // +4h for Dubai
+        const h = Math.floor(totalMins % (24 * 60) / 60);
+        const m = totalMins % 60;
+        D.settings[k] = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
       }
     });
   } finally { hideLoad(); }
@@ -607,13 +694,48 @@ function doLogout() {
   document.getElementById('app').classList.remove('show');
 }
 
-// Init Google auth once GSI library loads
+// Init Google auth once GSI library loads, and attempt silent session restore on refresh
 window.addEventListener('load', () => {
+  const savedUser = sessionStorage.getItem('lx_user');
+
+  function attemptSilentAuth() {
+    if (!savedUser) return; // No saved session — user must sign in manually
+    try {
+      CU = JSON.parse(savedUser);
+      // Temporarily replace callback for silent token refresh
+      tokenClient.callback = async (response) => {
+        tokenClient.callback = handleTokenResponse; // Restore normal callback
+        if (response.error) {
+          // Silent refresh failed — clear stale session and show login screen
+          CU = null;
+          sessionStorage.removeItem('lx_user');
+          return;
+        }
+        accessToken = response.access_token;
+        tokenIssuedAt = Date.now();
+        try {
+          await loadAllData();
+          launchApp();
+        } catch(e) {
+          CU = null;
+          sessionStorage.removeItem('lx_user');
+        }
+      };
+      tokenClient.requestAccessToken({ prompt: '' }); // Silent — no popup
+    } catch(e) {
+      sessionStorage.removeItem('lx_user');
+    }
+  }
+
   if (typeof google !== 'undefined' && google.accounts) {
     initGoogleAuth();
+    attemptSilentAuth();
   } else {
     const script = document.querySelector('script[src*="accounts.google.com"]');
-    if (script) script.addEventListener('load', initGoogleAuth);
+    if (script) script.addEventListener('load', () => {
+      initGoogleAuth();
+      attemptSilentAuth();
+    });
   }
 });
 
@@ -640,12 +762,15 @@ function isSuperAdmin() { return CU && CU.role==='superadmin'; }
 function fmtTime(t) {
   if (!t) return '';
   const s = String(t);
-  // If it's a full ISO datetime (from Google Sheets), extract just the time
+  // If it's a full ISO datetime (from Google Sheets), convert UTC → Dubai (UTC+4)
+  // Google Sheets stores time-only values in UTC, so 09:00 Dubai = 05:00 UTC
   if (s.includes('T')) {
-    const timePart = s.split('T')[1];
-    if (timePart) {
-      const [h, m] = timePart.split(':');
-      return String(parseInt(h)).padStart(2,'0') + ':' + String(parseInt(m)).padStart(2,'0');
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240; // +4h for Dubai
+      const h = Math.floor(totalMins % (24 * 60) / 60);
+      const m = totalMins % 60;
+      return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
     }
   }
   // If already in HH:MM format, return as-is
@@ -804,8 +929,8 @@ function nextM(){if(calM===11){calM=0;calY++;}else calM++;renderCal();}
 // Calendly-style booking
 let bkCalY = null, bkCalM = null, bkSelDate = null, bkSelTime = null;
 
-function onBkTypeChange() { bkSelTime = null; bkSelDate = null; updateBkPhSection(); renderBkCal(); syncBkGCal(); }
-function onBkPhChange()   { bkSelDate = null; bkSelTime = null; renderBkCal(); syncBkGCal(); }
+function onBkTypeChange() { bkSelTime = null; bkSelDate = null; updateBkPhSection(); renderBkCal(); syncBkGCal(); updateBkDetails(); }
+function onBkPhChange()   { bkSelDate = null; bkSelTime = null; renderBkCal(); syncBkGCal(); updateBkDetails(); }
 function bkPrevM() { if(bkCalM===0){bkCalM=11;bkCalY--;}else bkCalM--; renderBkCal(); syncBkGCal(); }
 function bkNextM() { if(bkCalM===11){bkCalM=0;bkCalY++;}else bkCalM++; renderBkCal(); syncBkGCal(); }
 
@@ -841,10 +966,14 @@ function parseWorkTime(val, fallback) {
   const s = String(val);
   // Already in HH:MM format
   if (/^\d{1,2}:\d{2}$/.test(s)) return s;
-  // Google Sheets stores times as full date strings e.g. '1899-12-30T04:18:48.000Z'
+  // Google Sheets stores times as full date strings e.g. '1899-12-30T05:00:00.000Z' (UTC)
+  // Convert UTC → Dubai (UTC+4)
   try {
     const d = new Date(s);
-    if (!isNaN(d)) return String(d.getUTCHours()).padStart(2,'0') + ':' + String(d.getUTCMinutes()).padStart(2,'0');
+    if (!isNaN(d)) {
+      const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240; // +4h for Dubai
+      return String(Math.floor(totalMins % (24*60) / 60)).padStart(2,'0') + ':' + String(totalMins % 60).padStart(2,'0');
+    }
   } catch(e) {}
   return fallback;
 }
@@ -995,9 +1124,26 @@ function selectBkTime(t){
 }
 
 function updateBkDetails(){
-  const ready=bkSelDate&&bkSelTime;
-  document.getElementById('bk-details').style.display=ready?'block':'none';
-  document.getElementById('save-bk-btn').disabled=!ready;
+  // Show details panel as soon as a date+time are picked
+  const slotPicked = bkSelDate && bkSelTime;
+  document.getElementById('bk-details').style.display = slotPicked ? 'block' : 'none';
+
+  // But require ALL booking fields before enabling the confirm button
+  const typeId  = document.getElementById('b-type')?.value?.trim() || '';
+  const phEl    = document.getElementById('b-ph');
+  const phId    = phEl ? (phEl.value || '').trim() : '';
+  const client  = document.getElementById('b-client')?.value?.trim() || '';
+  const maps    = document.getElementById('b-maps')?.value?.trim() || '';
+  const agent   = document.getElementById('b-agent')?.value?.trim() || '';
+
+  // Photographer is only required in 'any' mode (dropdown exists); 'all'/'exclusive' auto-assign
+  const a = typeId ? getAssignment(typeId) : { mode: 'any' };
+  const phOk = (a.mode === 'all' || a.mode === 'exclusive') ? true : !!phId;
+
+  const allFilled = slotPicked && typeId && phOk && client && maps && agent;
+  const btn = document.getElementById('save-bk-btn');
+  btn.disabled = !allFilled;
+  btn.title = allFilled ? '' : 'Please fill in all booking details before confirming';
 }
 
 
@@ -1268,6 +1414,11 @@ function toggleAssignMember(typeId, memberId, checked) {
 }
 
 function openBkModal(id=null) {
+  // Only admins can edit existing bookings — agents can only create new ones
+  if (id && !isAdmin()) {
+    notify('Only admins can edit existing bookings. Please contact an admin if changes are needed.');
+    return;
+  }
   editBkId=id;
   bkCalY=TODAY.getFullYear(); bkCalM=TODAY.getMonth();
   bkSelDate=null; bkSelTime=null;
@@ -1337,7 +1488,10 @@ async function saveBk(){
         maps=document.getElementById('b-maps').value.trim(),
         agent=document.getElementById('b-agent').value.trim(),
         notes=document.getElementById('b-notes').value.trim();
-  if(!date||!time||!client){notify('Please select a date, time and enter property address');return;}
+  if(!date||!time||!typeId||!client||!maps||!agent){
+    notify('Please fill in all booking details: date, time, type, property address, Google Maps pin, and agent name');
+    return;
+  }
   const primaryPhId = Array.isArray(phIds) ? phIds[0] : phIds;
   const btn=document.getElementById('save-bk-btn');
   btn.disabled=true; btn.textContent='Saving…';
@@ -1481,7 +1635,7 @@ function renderBkTable(){
       <td>${calCell}</td>
       <td><div class="fx" style="gap:5px">
         <button class="btn bsm" onclick="openDetail('${b.ID}')">View</button>
-        ${b.Status==='upcoming'?`<button class="btn bsm" onclick="openBkModal('${b.ID}')">Edit</button>`:''}
+        ${b.Status==='upcoming' && isAdmin() ?`<button class="btn bsm" onclick="openBkModal('${b.ID}')">Edit</button>`:''}
       </div></td>
     </tr>`;
   }).join('') : `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tl);font-size:12px">No bookings found</td></tr>`;
@@ -1506,7 +1660,7 @@ function openDetail(id){
     </div>
     ${b.Notes?`<div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Notes</div><div style="font-size:12px;color:var(--tm)">${b.Notes}</div></div>`:''}`;
   const acts=document.getElementById('det-actions');acts.innerHTML='';
-  if(b.Status==='upcoming'){
+  if(b.Status==='upcoming' && isAdmin()){
     const cancelBtn=document.createElement('button');cancelBtn.className='btn bdanger';cancelBtn.textContent='Cancel Booking';cancelBtn.onclick=cancelBk;acts.appendChild(cancelBtn);
   }
   // Delete button for admins - permanently removes booking
