@@ -489,8 +489,39 @@ const TODAY = new Date();
 let calY = TODAY.getFullYear(), calM = TODAY.getMonth();
 let bkFilter = 'all', selColor = 'shoot', editBkId = null, viewBkId = null;
 let CU = null;
-const APP_VERSION = '2026.04.08-cancel-unified';
+const APP_VERSION = '2026.04.08-cal-cache';
 console.log('%c LUXURYX Booking System — version ' + APP_VERSION, 'background:#0c233e;color:#fff;padding:4px 8px;border-radius:3px');
+
+// ── Calendar-sent cache (client-side) ─────────────────────────────────────
+// The backend doesn't reliably persist CalAdded / CalEventId after markCalAdded,
+// so after a refresh the bookings list shows "Not Sent" for events that were
+// actually sent. To fix that without a backend change, we keep a local cache in
+// localStorage keyed by booking ID. When rendering, we merge this cache with
+// the server data so any booking we previously confirmed as sent stays "Sent".
+const CAL_CACHE_KEY = 'lx_cal_sent_cache';
+function loadCalCache() {
+  try { return JSON.parse(localStorage.getItem(CAL_CACHE_KEY) || '{}'); } catch(_) { return {}; }
+}
+function saveCalCache(cache) {
+  try { localStorage.setItem(CAL_CACHE_KEY, JSON.stringify(cache)); } catch(_) {}
+}
+function markCalSentLocally(bookingId, calEventId) {
+  if (!bookingId) return;
+  const cache = loadCalCache();
+  cache[String(bookingId)] = { calEventId: calEventId || '', ts: Date.now() };
+  saveCalCache(cache);
+}
+function clearCalSentLocally(bookingId) {
+  if (!bookingId) return;
+  const cache = loadCalCache();
+  delete cache[String(bookingId)];
+  saveCalCache(cache);
+}
+function isCalSentLocally(bookingId) {
+  if (!bookingId) return null;
+  const cache = loadCalCache();
+  return cache[String(bookingId)] || null;
+}
 
 let accessToken = null;
 let tokenClient = null;
@@ -1646,6 +1677,9 @@ async function saveBk(){
             // the calendar event itself succeeded, so the UI should reflect that.
             newBk.CalAdded='TRUE';
             newBk.CalEventId = calEvent.id;
+            // Persist to client-side cache so a refresh still shows "Sent" even if the
+            // backend markCalAdded write to the sheet silently fails.
+            markCalSentLocally(res.id, calEvent.id);
             // Persist to sheet in the background — don't let a backend hiccup mark the invite as "not sent"
             try {
               await api({action:'markCalAdded', id:res.id, calEventId: calEvent.id});
@@ -1730,8 +1764,16 @@ function renderBkTable(){
     const rawStatus = String(b.Status||'').toLowerCase().trim();
     const normStatus = ['upcoming','completed','cancelled'].includes(rawStatus) ? rawStatus : 'upcoming';
     const sb={upcoming:'rose',completed:'green',cancelled:'red'}[normStatus]||'gry';
-    // Calendar is considered "sent" if CalAdded flag is TRUE OR we have a stored event id
-    const calAdded = String(b.CalAdded).toUpperCase()==='TRUE' || !!(b.CalEventId && String(b.CalEventId).trim());
+    // Calendar is considered "sent" if any of: CalAdded flag TRUE, stored CalEventId,
+    // or a local cache entry from a previous successful send (covers the case where
+    // the backend didn't persist markCalAdded to the sheet).
+    const cachedCal = isCalSentLocally(b.ID);
+    const calAdded = String(b.CalAdded).toUpperCase()==='TRUE'
+      || !!(b.CalEventId && String(b.CalEventId).trim())
+      || !!cachedCal;
+    // If the server doesn't have CalEventId but the cache does, back-fill it so
+    // delete/cancel can use the stored event ID.
+    if (cachedCal && cachedCal.calEventId && !b.CalEventId) b.CalEventId = cachedCal.calEventId;
     const calCell = normStatus==='upcoming'
       ? `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'Pending'}</span>`
       : `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'—'}</span>`;
@@ -1758,7 +1800,9 @@ function openDetail(id){
   const t=getType(b.TypeID),m=getMember(b.PhotographerID);
   const rawStatus = String(b.Status||'').toLowerCase().trim();
   const normStatus = ['upcoming','completed','cancelled'].includes(rawStatus) ? rawStatus : 'upcoming';
-  const calAdded=String(b.CalAdded).toUpperCase()==='TRUE' || !!(b.CalEventId && String(b.CalEventId).trim());
+  const cachedCalDet = isCalSentLocally(b.ID);
+  if (cachedCalDet && cachedCalDet.calEventId && !b.CalEventId) b.CalEventId = cachedCalDet.calEventId;
+  const calAdded=String(b.CalAdded).toUpperCase()==='TRUE' || !!(b.CalEventId && String(b.CalEventId).trim()) || !!cachedCalDet;
   document.getElementById('det-title').textContent=b.Client;
   document.getElementById('det-date').textContent=fmtDate(b.Date)+' at '+fmtTime(b.Time);
   document.getElementById('det-body').innerHTML=`
@@ -1965,6 +2009,8 @@ async function cancelBk(){
     // 3) Remove from local data (regardless of which backend action succeeded — both should
     //    hide it from the list on next load)
     D.bookings = D.bookings.filter(x=>String(x.ID)!==String(viewBkId));
+    // Clear any client-side calendar-sent cache entry for this booking
+    clearCalSentLocally(viewBkId);
 
     // 4) Feedback
     if (calDeleted) {
