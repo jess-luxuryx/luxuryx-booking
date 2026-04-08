@@ -651,15 +651,25 @@ async function loadAllData() {
     // Sync server assignments to local cache
     typeAssignments = D.assignments;
     
-    // Google Sheets returns time values as ISO date strings — convert UTC → Dubai (UTC+4)
+    // Google Sheets returns time values as ISO date strings — convert to Dubai local time via Intl
+    // (1899 reference dates use Dubai LMT +3:41:12, not +4:00 — Intl handles this correctly)
     ['workStart','workEnd'].forEach(k => {
       const v = D.settings[k];
       if (v && v.includes('T')) {
         const d = new Date(v);
-        const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240; // +4h for Dubai
-        const h = Math.floor(totalMins % (24 * 60) / 60);
-        const m = totalMins % 60;
-        D.settings[k] = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+        if (!isNaN(d.getTime())) {
+          try {
+            const parts = new Intl.DateTimeFormat('en-GB', {
+              timeZone: 'Asia/Dubai', hour: '2-digit', minute: '2-digit', hour12: false
+            }).formatToParts(d);
+            const h = parts.find(p => p.type === 'hour').value;
+            const m = parts.find(p => p.type === 'minute').value;
+            D.settings[k] = h + ':' + m;
+          } catch(e) {
+            const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240;
+            D.settings[k] = String(Math.floor(totalMins % (24*60) / 60)).padStart(2,'0') + ':' + String(totalMins % 60).padStart(2,'0');
+          }
+        }
       }
     });
   } finally { hideLoad(); }
@@ -748,18 +758,29 @@ function isAdmin() { return CU && ['admin','superadmin'].includes(CU.role); }
 function isSuperAdmin() { return CU && CU.role==='superadmin'; }
 
 // Parse time from various formats (handles Google Sheets datetime strings like 1899-12-30T05:18:48.000Z)
+// Note: 1899-12-30 dates use Dubai LMT (UTC+3:41:12), NOT UTC+4 — so we use Intl to get it right.
 function fmtTime(t) {
   if (!t) return '';
   const s = String(t);
-  // If it's a full ISO datetime (from Google Sheets), convert UTC → Dubai (UTC+4)
-  // Google Sheets stores time-only values in UTC, so 09:00 Dubai = 05:00 UTC
+  // If it's a full ISO datetime (from Google Sheets), convert to Dubai local time via Intl
   if (s.includes('T')) {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
-      const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240; // +4h for Dubai
-      const h = Math.floor(totalMins % (24 * 60) / 60);
-      const m = totalMins % 60;
-      return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Dubai',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).formatToParts(d);
+        const h = parts.find(p => p.type === 'hour').value;
+        const m = parts.find(p => p.type === 'minute').value;
+        return h + ':' + m;
+      } catch(e) {
+        // Fallback: approximate with +4h offset
+        const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240;
+        return String(Math.floor(totalMins % (24*60) / 60)).padStart(2,'0') + ':' + String(totalMins % 60).padStart(2,'0');
+      }
     }
   }
   // If already in HH:MM format, return as-is
@@ -922,13 +943,17 @@ function parseWorkTime(val, fallback) {
   const s = String(val);
   // Already in HH:MM format
   if (/^\d{1,2}:\d{2}$/.test(s)) return s;
-  // Google Sheets stores times as full date strings e.g. '1899-12-30T05:00:00.000Z' (UTC)
-  // Convert UTC → Dubai (UTC+4)
+  // Google Sheets stores times as full date strings e.g. '1899-12-30T05:18:48.000Z'
+  // The 1899 reference date uses Dubai LMT (+3:41:12) — use Intl to convert correctly.
   try {
     const d = new Date(s);
     if (!isNaN(d)) {
-      const totalMins = d.getUTCHours() * 60 + d.getUTCMinutes() + 240; // +4h for Dubai
-      return String(Math.floor(totalMins % (24*60) / 60)).padStart(2,'0') + ':' + String(totalMins % 60).padStart(2,'0');
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Dubai', hour: '2-digit', minute: '2-digit', hour12: false
+      }).formatToParts(d);
+      const h = parts.find(p => p.type === 'hour').value;
+      const m = parts.find(p => p.type === 'minute').value;
+      return h + ':' + m;
     }
   } catch(e) {}
   return fallback;
