@@ -1666,6 +1666,46 @@ async function deleteCalendarEvent(eventId) {
   }
 }
 
+// Fallback: search for a matching calendar event by date and client name, then delete it.
+// Used when a booking doesn't have a stored CalEventId (legacy bookings or backend sync issue).
+async function findAndDeleteMatchingCalEvent(bk) {
+  if (!accessToken || !bk || !bk.Date) return false;
+  try {
+    const dateStr = isoDate(bk.Date);
+    const timeMin = dateStr + 'T00:00:00+04:00';
+    const timeMax = dateStr + 'T23:59:59+04:00';
+    const t = getType(bk.TypeID);
+    const summaryNeedle = '[LUXURYX]';
+    const clientNeedle = (bk.Client || '').trim();
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?`
+      + `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`
+      + `&singleEvents=true&orderBy=startTime&maxResults=50`
+      + (clientNeedle ? `&q=${encodeURIComponent(clientNeedle)}` : '');
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+    const data = await res.json();
+    if (data.error || !data.items) return false;
+
+    // Match by: [LUXURYX] prefix + client name in summary/description
+    const matches = data.items.filter(e => {
+      const s = (e.summary || '');
+      if (!s.includes(summaryNeedle)) return false;
+      if (clientNeedle && (s.includes(clientNeedle) || (e.description || '').includes(clientNeedle))) return true;
+      return false;
+    });
+
+    let deletedAny = false;
+    for (const ev of matches) {
+      const ok = await deleteCalendarEvent(ev.id);
+      if (ok) deletedAny = true;
+    }
+    return deletedAny;
+  } catch(e) {
+    console.error('findAndDeleteMatchingCalEvent failed:', e);
+    return false;
+  }
+}
+
 async function cancelBk(){
   if(!viewBkId)return;
   const b = D.bookings.find(x=>String(x.ID)===String(viewBkId));
@@ -1677,16 +1717,19 @@ async function cancelBk(){
     b.Status='cancelled';
     
     // Then try to delete the calendar event if it exists
-    if (b.CalEventId && accessToken) {
-      const deleted = await deleteCalendarEvent(b.CalEventId);
-      if (deleted) {
-        notify('Booking cancelled — calendar event removed',true);
-      } else {
-        notify('Booking cancelled — calendar event could not be removed');
+    let calDeleted = false;
+    if (accessToken) {
+      if (b.CalEventId) {
+        calDeleted = await deleteCalendarEvent(b.CalEventId);
       }
+      if (!calDeleted && String(b.CalAdded).toUpperCase() === 'TRUE') {
+        calDeleted = await findAndDeleteMatchingCalEvent(b);
+      }
+    }
+    if (calDeleted) {
+      notify('Booking cancelled — calendar event removed ✓', true);
     } else if (String(b.CalAdded).toUpperCase() === 'TRUE') {
-      // Calendar was added but we don't have the event ID (legacy booking)
-      notify('Booking cancelled — please manually remove calendar event');
+      notify('Booking cancelled — calendar event could not be removed automatically');
     } else {
       notify('Booking cancelled');
     }
@@ -1700,26 +1743,44 @@ async function cancelBk(){
 
 async function deleteBk(){
   if(!viewBkId)return;
-  if(!confirm('Permanently delete this booking? This cannot be undone.')) return;
-  
+  if(!confirm('Permanently delete this booking? This will also remove the Google Calendar event and cannot be undone.')) return;
+
   const b = D.bookings.find(x=>String(x.ID)===String(viewBkId));
   if(!b) return;
-  
+
+  let calDeleted = false;
+  let calAttempted = false;
+
   try {
-    // Delete calendar event first if it exists
-    if (b.CalEventId && accessToken) {
-      await deleteCalendarEvent(b.CalEventId);
+    // 1) Try to delete the calendar event using the stored event ID
+    if (accessToken) {
+      if (b.CalEventId) {
+        calAttempted = true;
+        calDeleted = await deleteCalendarEvent(b.CalEventId);
+      }
+      // 2) Fallback: if no CalEventId or deletion failed, search by client name and date
+      if (!calDeleted && String(b.CalAdded).toUpperCase() === 'TRUE') {
+        calAttempted = true;
+        calDeleted = await findAndDeleteMatchingCalEvent(b);
+      }
     }
-    
-    // Delete from database
+
+    // 3) Delete from database
     await api({action:'deleteBooking', id:viewBkId});
-    
-    // Remove from local data
+
+    // 4) Remove from local data
     D.bookings = D.bookings.filter(x=>String(x.ID)!==String(viewBkId));
-    
-    notify('Booking permanently deleted',true);
+
+    // 5) Feedback
+    if (calAttempted && calDeleted) {
+      notify('Booking deleted — calendar event removed ✓', true);
+    } else if (calAttempted && !calDeleted) {
+      notify('Booking deleted — calendar event could not be removed automatically');
+    } else {
+      notify('Booking permanently deleted', true);
+    }
+
     closeMo('mo-detail');
-    renderDashboard();
     renderBkTable();
     renderCal();
   } catch(e){err(e.message);}
