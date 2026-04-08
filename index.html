@@ -489,6 +489,9 @@ const TODAY = new Date();
 let calY = TODAY.getFullYear(), calM = TODAY.getMonth();
 let bkFilter = 'all', selColor = 'shoot', editBkId = null, viewBkId = null;
 let CU = null;
+const APP_VERSION = '2026.04.08-cancel-unified';
+console.log('%c LUXURYX Booking System — version ' + APP_VERSION, 'background:#0c233e;color:#fff;padding:4px 8px;border-radius:3px');
+
 let accessToken = null;
 let tokenClient = null;
 
@@ -1715,6 +1718,8 @@ function filterBk(f,btn){bkFilter=f;document.querySelectorAll('.tab').forEach(t=
 function renderBkTable(){
   const q=document.getElementById('bk-search').value.toLowerCase();
   let bks=[...D.bookings];
+  // Cancelled bookings are treated as permanently deleted — hide them from every view.
+  bks = bks.filter(b => String(b.Status||'').toLowerCase().trim() !== 'cancelled');
   if(CU?.role==='photographer') bks=bks.filter(b=>getMember(b.PhotographerID).Name===CU.name);
   if(bkFilter!=='all') bks=bks.filter(b=>b.Status===bkFilter);
   if(q) bks=bks.filter(b=>(b.Client||'').toLowerCase().includes(q)||getMember(b.PhotographerID).Name.toLowerCase().includes(q));
@@ -1784,10 +1789,10 @@ function openDetail(id){
   document.getElementById('mo-detail').classList.add('open');
 }
 
-async function deleteCalendarEvent(eventId) {
+async function deleteCalendarEvent(eventId, calendarId = 'primary') {
   if (!eventId || !accessToken) return false;
   try {
-    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`, {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + accessToken }
     });
@@ -1798,64 +1803,99 @@ async function deleteCalendarEvent(eventId) {
   }
 }
 
-// Fallback: search for a matching calendar event by date and client name, then delete it.
-// Used when a booking doesn't have a stored CalEventId (legacy bookings or backend sync issue).
+// Fallback: search for a matching calendar event across ALL of the user's calendars
+// (not just primary) and delete it. This handles the common case where the booking
+// was created by a different user, so the event lives on THEIR calendar, not the
+// current user's primary calendar.
 async function findAndDeleteMatchingCalEvent(bk) {
   if (!accessToken || !bk || !bk.Date) return false;
   try {
     const dateStr = isoDate(bk.Date);
-    // Widen the window to ±1 day to tolerate timezone edge cases
-    const dayBefore = new Date(dateStr + 'T00:00:00+04:00'); dayBefore.setDate(dayBefore.getDate() - 1);
-    const dayAfter  = new Date(dateStr + 'T23:59:59+04:00'); dayAfter.setDate(dayAfter.getDate() + 1);
+    const dayBefore = new Date(dateStr + 'T00:00:00Z'); dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+    const dayAfter  = new Date(dateStr + 'T00:00:00Z'); dayAfter.setUTCDate(dayAfter.getUTCDate() + 2);
     const timeMin = dayBefore.toISOString();
     const timeMax = dayAfter.toISOString();
-    const summaryNeedle = '[LUXURYX]';
-    const clientNeedle = (bk.Client || '').trim().toLowerCase();
     const bkTime = fmtTime(bk.Time); // "HH:MM"
+    const clientNeedle = (bk.Client || '').trim().toLowerCase();
+    const bkStartMs = new Date(dateStr + 'T' + (bkTime || '00:00') + ':00+04:00').getTime();
 
-    // Don't use the `q` search parameter — it's unreliable with punctuation/casing.
-    // Fetch all events in the window and filter client-side.
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?`
-      + `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`
-      + `&singleEvents=true&orderBy=startTime&maxResults=250`;
-    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
-    const data = await res.json();
-    if (data.error) { console.warn('Calendar list error:', data.error); return false; }
-    if (!data.items || data.items.length === 0) return false;
-
-    // Match candidates with permissive rules — accept if ANY of:
-    //   (a) summary starts with [LUXURYX] AND client name appears in summary or description
-    //   (b) start time matches bkTime AND client name appears in summary or description
-    //   (c) summary starts with [LUXURYX] AND start time matches bkTime
-    const matches = data.items.filter(e => {
-      const s = (e.summary || '').toLowerCase();
-      const d = (e.description || '').toLowerCase();
-      const hasLux = s.includes(summaryNeedle.toLowerCase());
-      const hasClient = clientNeedle && (s.includes(clientNeedle) || d.includes(clientNeedle));
-      // Extract HH:MM from event start
-      let timeMatches = false;
-      const sdt = e.start && (e.start.dateTime || e.start.date);
-      if (sdt && bkTime) {
-        try {
-          const parts = new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'Asia/Dubai', hour: '2-digit', minute: '2-digit', hour12: false
-          }).formatToParts(new Date(sdt));
-          const h = parts.find(p => p.type === 'hour')?.value || '';
-          const m = parts.find(p => p.type === 'minute')?.value || '';
-          timeMatches = (h + ':' + m) === bkTime;
-        } catch(_) {}
+    // 1) Get every calendar the user has access to
+    let calendars = [{ id: 'primary', summary: 'primary' }];
+    try {
+      const calListRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader', {
+        headers: { Authorization: 'Bearer ' + accessToken }
+      });
+      const calListData = await calListRes.json();
+      if (calListData.items && calListData.items.length > 0) {
+        calendars = calListData.items.map(c => ({ id: c.id, summary: c.summary, accessRole: c.accessRole }));
       }
-      return (hasLux && hasClient) || (timeMatches && hasClient) || (hasLux && timeMatches);
-    });
+    } catch(e) {
+      console.warn('calendarList.list failed, using primary only:', e);
+    }
+    console.log('Searching', calendars.length, 'calendars for LUXURYX event matching', {date: dateStr, time: bkTime, client: bk.Client});
 
-    if (matches.length === 0) {
-      console.warn('findAndDeleteMatchingCalEvent: no matches found among', data.items.length, 'events for', bk.Client, bkTime);
+    let totalScanned = 0;
+    let deletedAny = false;
+    const allMisses = [];
+
+    for (const cal of calendars) {
+      try {
+        const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?`
+          + `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`
+          + `&singleEvents=true&orderBy=startTime&maxResults=500&showDeleted=false`;
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+        const data = await res.json();
+        if (data.error || !data.items) continue;
+        totalScanned += data.items.length;
+
+        const scored = data.items.map(e => {
+          const s = (e.summary || '').toLowerCase();
+          const d = (e.description || '').toLowerCase();
+          const hasLux = s.includes('luxuryx');
+          const hasClient = clientNeedle && (s.includes(clientNeedle) || d.includes(clientNeedle));
+          const sdt = e.start && (e.start.dateTime || e.start.date);
+          const evMs = sdt ? new Date(sdt).getTime() : null;
+          const diffMin = (evMs && bkStartMs) ? Math.abs(evMs - bkStartMs) / 60000 : Infinity;
+          let sameDay = false;
+          if (sdt) {
+            try {
+              const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(sdt));
+              const y = parts.find(p=>p.type==='year')?.value;
+              const mm = parts.find(p=>p.type==='month')?.value;
+              const d2 = parts.find(p=>p.type==='day')?.value;
+              sameDay = (y + '-' + mm + '-' + d2) === dateStr;
+            } catch(_) {}
+          }
+          return { ev: e, hasLux, hasClient, diffMin, sameDay };
+        });
+
+        const matches = scored.filter(x =>
+          (x.sameDay && x.hasLux && x.diffMin <= 120) ||
+          (x.sameDay && x.hasClient) ||
+          (x.hasLux && x.diffMin <= 30)
+        );
+
+        if (matches.length > 0) {
+          console.log(`[${cal.summary || cal.id}] matched ${matches.length} events:`, matches.map(x => x.ev.summary));
+          for (const m of matches) {
+            const ok = await deleteCalendarEvent(m.ev.id, cal.id);
+            if (ok) deletedAny = true;
+            else console.warn('Failed to delete event', m.ev.id, 'from', cal.id, '(maybe not the organizer)');
+          }
+        } else {
+          // Collect near-misses for diagnostic output
+          const luxEvents = scored.filter(x => x.hasLux).map(x => ({cal: cal.summary||cal.id, summary: x.ev.summary, diffMin: x.diffMin, sameDay: x.sameDay}));
+          if (luxEvents.length > 0) allMisses.push(...luxEvents);
+        }
+      } catch(calErr) {
+        console.warn('Scan failed for calendar', cal.id, calErr);
+      }
     }
 
-    let deletedAny = false;
-    for (const ev of matches) {
-      const ok = await deleteCalendarEvent(ev.id);
-      if (ok) deletedAny = true;
+    if (!deletedAny) {
+      console.warn(`Calendar fallback: 0 matches out of ${totalScanned} events across ${calendars.length} calendars. Near-miss LUXURYX events:`, allMisses);
+      // Expose diagnostic state so the user can inspect from the console
+      window.__lastCalScan = { bk, bkTime, dateStr, totalScanned, calendars, allMisses };
     }
     return deletedAny;
   } catch(e) {
@@ -1883,7 +1923,24 @@ async function cancelBk(){
     if (tokenOk && accessToken) {
       if (b.CalEventId) {
         calAttempted = true;
-        calDeleted = await deleteCalendarEvent(b.CalEventId);
+        // Try primary first
+        calDeleted = await deleteCalendarEvent(b.CalEventId, 'primary');
+        // If primary didn't work, try every other calendar by ID
+        if (!calDeleted) {
+          try {
+            const calListRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer', {
+              headers: { Authorization: 'Bearer ' + accessToken }
+            });
+            const calListData = await calListRes.json();
+            if (calListData.items) {
+              for (const cal of calListData.items) {
+                if (cal.id === 'primary') continue;
+                const ok = await deleteCalendarEvent(b.CalEventId, cal.id);
+                if (ok) { calDeleted = true; break; }
+              }
+            }
+          } catch(_) {}
+        }
       }
       // Always run the fallback search too — catches legacy bookings, bookings with a
       // missing/stale CalEventId, and anything the direct delete missed.
@@ -1893,10 +1950,20 @@ async function cancelBk(){
       }
     }
 
-    // 2) Delete from the backend sheet (permanent)
-    await api({action:'deleteBooking', id:viewBkId});
+    // 2) Persist on the backend. We don't know which action name the Apps Script implements,
+    //    so we try BOTH — deleteBooking (hard delete) AND cancelBooking (status→cancelled).
+    //    Whichever one the backend actually handles will take effect; the other is a no-op.
+    let backendOk = false;
+    try { await api({action:'deleteBooking', id:viewBkId}); backendOk = true; }
+    catch(delErr) { console.warn('deleteBooking failed:', delErr.message); }
+    try { await api({action:'cancelBooking', id:viewBkId}); backendOk = true; }
+    catch(cancErr) { console.warn('cancelBooking failed:', cancErr.message); }
+    if (!backendOk) {
+      throw new Error('Backend did not accept delete or cancel. Please contact admin.');
+    }
 
-    // 3) Remove from local data
+    // 3) Remove from local data (regardless of which backend action succeeded — both should
+    //    hide it from the list on next load)
     D.bookings = D.bookings.filter(x=>String(x.ID)!==String(viewBkId));
 
     // 4) Feedback
