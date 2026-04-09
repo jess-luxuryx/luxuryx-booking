@@ -116,6 +116,9 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .cday:hover{background:rgba(12,35,62,0.03)}
 .cday.om .dnum{opacity:0.3}
 .cday.tod .dnum{color:var(--rose-dark);font-weight:500}
+.cday.weekend{background:repeating-linear-gradient(45deg,rgba(12,35,62,0.02),rgba(12,35,62,0.02) 6px,rgba(12,35,62,0.05) 6px,rgba(12,35,62,0.05) 12px);cursor:not-allowed}
+.cday.weekend:hover{background:repeating-linear-gradient(45deg,rgba(12,35,62,0.02),rgba(12,35,62,0.02) 6px,rgba(12,35,62,0.05) 6px,rgba(12,35,62,0.05) 12px)}
+.cday.weekend .dnum{opacity:0.4}
 .dnum{font-size:11px;color:var(--tl);margin-bottom:4px}
 .dev{font-size:9px;padding:2px 5px;border-radius:2px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .es{background:rgba(12,35,62,0.1);color:var(--navy)}
@@ -163,8 +166,27 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .cal-link:hover{border-color:var(--rose)}
 .setup-banner{background:rgba(227,164,138,0.12);border:1px solid rgba(227,164,138,0.3);border-radius:6px;padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--td);line-height:1.8}
 .setup-banner strong{color:var(--navy);font-weight:500}
+/* Desktop/mobile visibility defaults */
+.desktop-only{display:block}
+.mobile-only{display:none}
+.mobile-agenda{padding:8px 0}
+.agenda-day{margin-bottom:18px}
+.agenda-date{display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--tl);padding:0 4px 8px;border-bottom:1px solid var(--bn);margin-bottom:8px}
+.agenda-day.is-today .agenda-date{color:var(--rose)}
+.agenda-today-chip{background:var(--rose);color:#fff;font-size:8px;letter-spacing:1px;padding:2px 6px;border-radius:3px}
+.agenda-items{display:flex;flex-direction:column;gap:6px}
+.agenda-item{display:flex;gap:12px;padding:10px 12px;background:var(--offwhite);border:1px solid var(--bn);border-radius:5px;cursor:pointer;transition:border-color .2s}
+.agenda-item:hover{border-color:var(--rose)}
+.agenda-item.agenda-gcal{background:rgba(180,200,220,0.12);border-style:dashed}
+.agenda-time{font-size:10px;color:var(--td);font-weight:500;min-width:50px;flex-shrink:0}
+.agenda-body{flex:1;min-width:0}
+.agenda-title{font-size:12px;color:var(--navy);font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agenda-meta{font-size:9px;color:var(--tl);letter-spacing:1px;text-transform:uppercase}
+.agenda-empty{text-align:center;padding:40px 16px;font-size:11px;color:var(--tl);letter-spacing:1px}
 /* ── Mobile / tablet (≤768px) ───────────────────────────────────────── */
 @media(max-width:768px){
+  .desktop-only{display:none !important}
+  .mobile-only{display:block !important}
   /* Layout */
   .main{padding:14px}
   .ptitle{font-size:20px;letter-spacing:1px}
@@ -204,8 +226,59 @@ tr:hover td{background:rgba(12,35,62,0.02)}
   .mact{flex-direction:column-reverse;gap:8px;padding-top:14px}
   .mact .btn{width:100%;justify-content:center;padding:12px 18px}
 
-  /* Bookings table — keep scrollable with comfortable min-width */
-  .page#page-bookings table{min-width:720px}
+  /* Bookings list — table → cards on mobile */
+  .page#page-bookings .card > div[style*="overflow"]{overflow:visible !important}
+  .page#page-bookings table{min-width:0;width:100%;border-collapse:separate;border-spacing:0}
+  .page#page-bookings thead{display:none}
+  .page#page-bookings tbody{display:block}
+  .page#page-bookings tr.bk-row{
+    display:block;
+    background:var(--white);
+    border:1px solid var(--bn);
+    border-radius:6px;
+    padding:14px 16px;
+    margin-bottom:12px;
+    box-shadow:0 1px 2px rgba(12,35,62,0.03);
+  }
+  .page#page-bookings tr.bk-row td{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:6px 0;
+    border:none;
+    font-size:12px;
+    gap:12px;
+    min-height:0;
+  }
+  .page#page-bookings tr.bk-row td::before{
+    content:attr(data-label);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    font-size:9px;
+    color:var(--tl);
+    font-weight:500;
+    flex-shrink:0;
+  }
+  .page#page-bookings tr.bk-row td[data-label=""]::before{display:none}
+  .page#page-bookings tr.bk-row td.td-client{
+    max-width:none !important;
+    white-space:normal !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+    text-align:right;
+    word-break:break-word;
+  }
+  .page#page-bookings tr.bk-row td.td-actions{
+    justify-content:flex-end;
+    padding-top:12px;
+    margin-top:6px;
+    border-top:1px solid var(--light);
+  }
+  .page#page-bookings tr.bk-row td.td-actions .btn{flex:1;justify-content:center}
+  .page#page-bookings tr.bk-row td.td-actions > div{display:flex;gap:8px;width:100%}
+  .page#page-bookings tbody tr:not(.bk-row){display:block;padding:30px 12px;text-align:center}
+  .page#page-bookings tbody tr:not(.bk-row) td{display:block;border:none;padding:0}
+  .page#page-bookings tbody tr:not(.bk-row) td::before{display:none}
 
   /* Booking modal — calendar stacks over slot list */
   .bk-top{grid-template-columns:1fr;gap:10px}
@@ -345,8 +418,9 @@ tr:hover td{background:rgba(12,35,62,0.02)}
       </div>
       <div class="calw">
         <div class="calh"><button class="caln" onclick="prevM()">&#8249;</button><div class="calt" id="cal-title"></div><button class="caln" onclick="nextM()">&#8250;</button></div>
-        <div class="cg" id="cal-dow"></div>
-        <div class="cg" id="cal-days"></div>
+        <div class="cg desktop-only" id="cal-dow"></div>
+        <div class="cg desktop-only" id="cal-days"></div>
+        <div class="mobile-agenda mobile-only" id="mobile-agenda"></div>
       </div>
       <div class="fx" style="gap:16px;margin-top:12px;flex-wrap:wrap">
         <div class="fx" style="gap:5px"><span style="width:10px;height:10px;background:rgba(12,35,62,0.15);border-radius:2px;display:inline-block"></span><span style="font-size:10px;color:var(--tl)">Photo Shoot</span></div>
@@ -489,7 +563,7 @@ const TODAY = new Date();
 let calY = TODAY.getFullYear(), calM = TODAY.getMonth();
 let bkFilter = 'all', selColor = 'shoot', editBkId = null, viewBkId = null;
 let CU = null;
-const APP_VERSION = '2026.04.08-cal-cache';
+const APP_VERSION = '2026.04.08-mobile-ui';
 console.log('%c LUXURYX Booking System — version ' + APP_VERSION, 'background:#0c233e;color:#fff;padding:4px 8px;border-radius:3px');
 
 // ── Calendar-sent cache (client-side) ─────────────────────────────────────
@@ -852,6 +926,15 @@ window.addEventListener('load', async () => {
             accessToken = response.access_token;
             tokenIssuedAt = Date.now();
             console.log('Silent token refresh succeeded');
+            // Re-render calendar so GCal events appear now that we have a token
+            try {
+              if (typeof renderCal === 'function' && document.getElementById('page-calendar')) {
+                renderCal();
+              }
+              if (typeof syncGCal === 'function') {
+                syncGCal().then(() => { try { renderCal(); } catch(_){} }).catch(()=>{});
+              }
+            } catch(_) {}
           } else {
             console.warn('Silent token refresh failed — Calendar features may be unavailable until re-sign-in');
           }
@@ -1006,6 +1089,10 @@ function renderCal() {
     else{dn=i-fd+1;}
     const ds=`${calY}-${String(calM+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
     if(!oth&&new Date(calY,calM,dn).toDateString()===TODAY.toDateString()) cls+=' tod';
+    // Mark weekends as non-bookable (Dubai work week is Mon-Fri)
+    const cellDow = new Date(calY, calM, oth ? (i<fd ? -(fd-1-i) : dim + (i-fd-dim+1)) : dn).getDay();
+    const isWeekend = cellDow === 0 || cellDow === 6;
+    if (isWeekend) cls += ' weekend';
 
     // App bookings — only show for current month days
     const evts = oth ? [] : D.bookings.filter(b=>b.Status!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
@@ -1019,19 +1106,99 @@ function renderCal() {
     const shown = Math.min(evts.length,2) + Math.min(dayGcal.length,2);
     const more = total > shown ? `<div style="font-size:9px;color:var(--tl)">+${total-shown} more</div>` : '';
 
-    cells+=`<div class="${cls}" onclick="onDayClick('${ds}')"><div class="dnum">${dn}</div>${evH}${gcalH}${more}</div>`;
+    // Weekends aren't clickable (no new booking can start on a weekend)
+    const clickHandler = isWeekend ? '' : ` onclick="onDayClick('${ds}')"`;
+    cells+=`<div class="${cls}"${clickHandler}><div class="dnum">${dn}</div>${evH}${gcalH}${more}</div>`;
   }
   document.getElementById('cal-days').innerHTML=cells;
   const cf=document.getElementById('cal-filter'),cv=cf.value;
   cf.innerHTML='<option value="all">All Team</option>'+D.team.map(m=>`<option value="${m.ID}">${m.Name}</option>`).join('');
   cf.value=cv;
 
+  // ── Mobile agenda view ─────────────────────────────────────────
+  // On small screens we render a vertical list of bookings for the current month
+  // instead of the cramped month grid.
+  const agendaEl = document.getElementById('mobile-agenda');
+  if (agendaEl) {
+    const monthBkRaw = D.bookings
+      .filter(b => b.Status !== 'cancelled')
+      .filter(b => {
+        const bd = isoDate(b.Date);
+        return bd >= `${calY}-${String(calM+1).padStart(2,'0')}-01`
+          && bd <= `${calY}-${String(calM+1).padStart(2,'0')}-${String(dim).padStart(2,'0')}`;
+      })
+      .filter(b => fv === 'all' || String(b.PhotographerID) === fv);
+    const monthBk = monthBkRaw.sort((a,b) => (isoDate(a.Date)+a.Time).localeCompare(isoDate(b.Date)+b.Time));
+
+    const monthGcal = gcalEvts
+      .filter(e => e.date >= `${calY}-${String(calM+1).padStart(2,'0')}-01` && e.date <= `${calY}-${String(calM+1).padStart(2,'0')}-${String(dim).padStart(2,'0')}`)
+      .sort((a,b) => (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+
+    // Group both by date
+    const byDate = {};
+    monthBk.forEach(b => {
+      const d = isoDate(b.Date);
+      if (!byDate[d]) byDate[d] = { app: [], gcal: [] };
+      byDate[d].app.push(b);
+    });
+    monthGcal.forEach(e => {
+      if (!byDate[e.date]) byDate[e.date] = { app: [], gcal: [] };
+      byDate[e.date].gcal.push(e);
+    });
+
+    const dates = Object.keys(byDate).sort();
+    if (dates.length === 0) {
+      agendaEl.innerHTML = `<div class="agenda-empty">No bookings in ${MONTHS[calM]}. Tap + Book to create one.</div>`;
+    } else {
+      agendaEl.innerHTML = dates.map(ds => {
+        const dayBk = byDate[ds];
+        const d = new Date(ds + 'T12:00:00');
+        const dayLabel = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        const isToday = d.toDateString() === TODAY.toDateString();
+        return `<div class="agenda-day${isToday?' is-today':''}">
+          <div class="agenda-date">${dayLabel}${isToday?' <span class="agenda-today-chip">TODAY</span>':''}</div>
+          <div class="agenda-items">
+            ${dayBk.app.map(b => {
+              const t = getType(b.TypeID), m = getMember(b.PhotographerID);
+              return `<div class="agenda-item" onclick="openDetail('${b.ID}')">
+                <div class="agenda-time">${fmtTime(b.Time)}</div>
+                <div class="agenda-body">
+                  <div class="agenda-title">${b.Client}</div>
+                  <div class="agenda-meta"><span class="bdg nvy" style="font-size:8px">${t.Name}</span> · ${m.Name}</div>
+                </div>
+              </div>`;
+            }).join('')}
+            ${dayBk.gcal.map(e => `<div class="agenda-item agenda-gcal">
+              <div class="agenda-time">${e.time || '—'}</div>
+              <div class="agenda-body">
+                <div class="agenda-title">📅 ${e.title}</div>
+                <div class="agenda-meta">Google Calendar</div>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
   // Fetch GCal in background and re-render when ready (only if not already cached)
   const uncached = members.filter(m=>!gcalCache[m.Email+'-'+calY+'-'+calM]);
   if (uncached.length > 0) syncGCal();
 }
 
-function onDayClick(ds){document.getElementById('b-date').value=ds;openBkModal();}
+function onDayClick(ds){
+  // Preset date for the booking modal (the 'b-date' input was removed, so this just
+  // seeds the selected date state that the modal's internal calendar reads).
+  const bd = document.getElementById('b-date');
+  if (bd) bd.value = ds;
+  bkSelDate = ds;
+  try {
+    const d = new Date(ds + 'T12:00:00');
+    bkCalY = d.getFullYear();
+    bkCalM = d.getMonth();
+  } catch(_) {}
+  openBkModal();
+}
 function prevM(){if(calM===0){calM=11;calY--;}else calM--;renderCal();}
 function nextM(){if(calM===11){calM=0;calY++;}else calM++;renderCal();}
 
@@ -1140,11 +1307,11 @@ function isSlotAvailable(phId, ds, time, dur) {
 }
 
 function dayHasAvailability(phId, ds, dur) {
-  // Block weekends — check workDays setting (defaults to Mon-Fri)
+  // Hard block weekends — Dubai work week is Mon-Fri.
+  // (We ignore D.settings.workDays here and always block Sat/Sun to prevent
+  // weekend bookings regardless of what's in the sheet settings.)
   const dayOfWeek = new Date(ds+'T12:00:00').getDay(); // 0=Sun, 6=Sat
-  const workDays = D.settings?.workDays || 'Mon,Tue,Wed,Thu,Fri';
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  if (!workDays.includes(dayNames[dayOfWeek])) return false;
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
   const ws = D.settings?.workStart || '09:00';
   const we = D.settings?.workEnd || '17:00';
   return getTimeSlots(ws, we, dur).some(t=>isSlotAvailable(phId, ds, t, dur));
@@ -1621,6 +1788,14 @@ async function saveBk(){
     notify('Please fill in all booking details: date, time, type, property address, Google Maps pin, and agent name');
     return;
   }
+  // Hard weekend block — Dubai weekend is Saturday (6) and Sunday (0).
+  // The calendar UI should already prevent weekend selection, but enforce it here too
+  // as a safety net in case settings/workDays was misconfigured.
+  const dow = new Date(date + 'T12:00:00').getDay();
+  if (dow === 0 || dow === 6) {
+    notify('Bookings cannot be made on weekends (Saturday or Sunday). Please choose a weekday.');
+    return;
+  }
   const primaryPhId = Array.isArray(phIds) ? phIds[0] : phIds;
   const btn=document.getElementById('save-bk-btn');
   btn.disabled=true; btn.textContent='Saving…';
@@ -1777,15 +1952,15 @@ function renderBkTable(){
     const calCell = normStatus==='upcoming'
       ? `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'Pending'}</span>`
       : `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'—'}</span>`;
-    return `<tr>
-      <td style="color:var(--navy);font-weight:400">${fmtDate(b.Date)}</td>
-      <td><span class="bdg nvy">${t.Name}</span></td>
-      <td>${m.Name}</td>
-      <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.Client}</td>
-      <td>${fmtTime(b.Time)}</td>
-      <td><span class="bdg ${sb}">${normStatus}</span></td>
-      <td>${calCell}</td>
-      <td><div class="fx" style="gap:5px">
+    return `<tr class="bk-row">
+      <td data-label="Date" style="color:var(--navy);font-weight:400">${fmtDate(b.Date)}</td>
+      <td data-label="Type"><span class="bdg nvy">${t.Name}</span></td>
+      <td data-label="Photographer">${m.Name}</td>
+      <td data-label="Client" class="td-client" style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.Client}</td>
+      <td data-label="Time">${fmtTime(b.Time)}</td>
+      <td data-label="Status"><span class="bdg ${sb}">${normStatus}</span></td>
+      <td data-label="Calendar">${calCell}</td>
+      <td data-label="" class="td-actions"><div class="fx" style="gap:5px">
         <button class="btn bsm" onclick="openDetail('${b.ID}')">View</button>
         ${normStatus==='upcoming' && isAdmin() ?`<button class="btn bsm" onclick="openBkModal('${b.ID}')">Edit</button>`:''}
       </div></td>
@@ -1914,9 +2089,13 @@ async function findAndDeleteMatchingCalEvent(bk) {
         });
 
         const matches = scored.filter(x =>
-          (x.sameDay && x.hasLux && x.diffMin <= 120) ||
+          // Same-day LUXURYX event — accept ANY time (calendars rarely have
+          // multiple LUXURYX events on the same day for the same property)
+          (x.sameDay && x.hasLux) ||
+          // Same-day client-name match (covers non-LUXURYX-tagged events)
           (x.sameDay && x.hasClient) ||
-          (x.hasLux && x.diffMin <= 30)
+          // Cross-day LUXURYX event within 4 hours of booking start (timezone edge cases)
+          (x.hasLux && x.diffMin <= 240)
         );
 
         if (matches.length > 0) {
