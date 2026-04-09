@@ -166,27 +166,8 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .cal-link:hover{border-color:var(--rose)}
 .setup-banner{background:rgba(227,164,138,0.12);border:1px solid rgba(227,164,138,0.3);border-radius:6px;padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--td);line-height:1.8}
 .setup-banner strong{color:var(--navy);font-weight:500}
-/* Desktop/mobile visibility defaults */
-.desktop-only{display:block}
-.mobile-only{display:none}
-.mobile-agenda{padding:8px 0}
-.agenda-day{margin-bottom:18px}
-.agenda-date{display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--tl);padding:0 4px 8px;border-bottom:1px solid var(--bn);margin-bottom:8px}
-.agenda-day.is-today .agenda-date{color:var(--rose)}
-.agenda-today-chip{background:var(--rose);color:#fff;font-size:8px;letter-spacing:1px;padding:2px 6px;border-radius:3px}
-.agenda-items{display:flex;flex-direction:column;gap:6px}
-.agenda-item{display:flex;gap:12px;padding:10px 12px;background:var(--offwhite);border:1px solid var(--bn);border-radius:5px;cursor:pointer;transition:border-color .2s}
-.agenda-item:hover{border-color:var(--rose)}
-.agenda-item.agenda-gcal{background:rgba(180,200,220,0.12);border-style:dashed}
-.agenda-time{font-size:10px;color:var(--td);font-weight:500;min-width:50px;flex-shrink:0}
-.agenda-body{flex:1;min-width:0}
-.agenda-title{font-size:12px;color:var(--navy);font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.agenda-meta{font-size:9px;color:var(--tl);letter-spacing:1px;text-transform:uppercase}
-.agenda-empty{text-align:center;padding:40px 16px;font-size:11px;color:var(--tl);letter-spacing:1px}
 /* ── Mobile / tablet (≤768px) ───────────────────────────────────────── */
 @media(max-width:768px){
-  .desktop-only{display:none !important}
-  .mobile-only{display:block !important}
   /* Layout */
   .main{padding:14px}
   .ptitle{font-size:20px;letter-spacing:1px}
@@ -287,12 +268,13 @@ tr:hover td{background:rgba(12,35,62,0.02)}
   .bk-slots-wrap{padding:14px;max-height:300px}
   .bk-day{font-size:12px}
 
-  /* Main calendar — tighter cells */
-  .cday{min-height:56px;padding:4px}
+  /* Main calendar — tighter cells for monthly grid */
+  .cday{min-height:52px;padding:3px}
   .dnum{font-size:10px}
-  .dev{font-size:8px;padding:1px 3px}
+  .dev{font-size:7px;padding:1px 2px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .calh{padding:10px 12px}
   .calt{font-size:11px;letter-spacing:2px}
+  .cdow{padding:6px 2px;font-size:8px;letter-spacing:1px}
 
   /* Tabs — horizontal scroll on overflow */
   .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -360,8 +342,6 @@ tr:hover td{background:rgba(12,35,62,0.02)}
   .bk-cal-grid{gap:1px}
   .bk-day{font-size:11px;padding:6px 0}
   .bk-dow{font-size:9px}
-  .desktop-only{display:none !important}
-  .mobile-only{display:block !important}
 }
 </style>
 </head>
@@ -428,9 +408,8 @@ tr:hover td{background:rgba(12,35,62,0.02)}
       </div>
       <div class="calw">
         <div class="calh"><button class="caln" onclick="prevM()">&#8249;</button><div class="calt" id="cal-title"></div><button class="caln" onclick="nextM()">&#8250;</button></div>
-        <div class="cg desktop-only" id="cal-dow"></div>
-        <div class="cg desktop-only" id="cal-days"></div>
-        <div class="mobile-agenda mobile-only" id="mobile-agenda"></div>
+        <div class="cg" id="cal-dow"></div>
+        <div class="cg" id="cal-days"></div>
       </div>
       <div class="fx" style="gap:16px;margin-top:12px;flex-wrap:wrap">
         <div class="fx" style="gap:5px"><span style="width:10px;height:10px;background:rgba(12,35,62,0.15);border-radius:2px;display:inline-block"></span><span style="font-size:10px;color:var(--tl)">Photo Shoot</span></div>
@@ -573,7 +552,7 @@ const TODAY = new Date();
 let calY = TODAY.getFullYear(), calM = TODAY.getMonth();
 let bkFilter = 'all', selColor = 'shoot', editBkId = null, viewBkId = null;
 let CU = null;
-const APP_VERSION = '2026.04.09-mobile-ui-2';
+const APP_VERSION = '2026.04.09-monthly-cal';
 console.log('%c LUXURYX Booking System — version ' + APP_VERSION, 'background:#0c233e;color:#fff;padding:4px 8px;border-radius:3px');
 
 // ── Calendar-sent cache (client-side) ─────────────────────────────────────
@@ -1129,72 +1108,6 @@ function renderCal() {
   const cf=document.getElementById('cal-filter'),cv=cf.value;
   cf.innerHTML='<option value="all">All Team</option>'+D.team.map(m=>`<option value="${m.ID}">${m.Name}</option>`).join('');
   cf.value=cv;
-
-  // ── Mobile agenda view ─────────────────────────────────────────
-  // On small screens we render a vertical list of bookings for the current month
-  // instead of the cramped month grid.
-  const agendaEl = document.getElementById('mobile-agenda');
-  if (agendaEl) {
-    const monthBkRaw = D.bookings
-      .filter(b => b.Status !== 'cancelled')
-      .filter(b => {
-        const bd = isoDate(b.Date);
-        return bd >= `${calY}-${String(calM+1).padStart(2,'0')}-01`
-          && bd <= `${calY}-${String(calM+1).padStart(2,'0')}-${String(dim).padStart(2,'0')}`;
-      })
-      .filter(b => fv === 'all' || String(b.PhotographerID) === fv);
-    const monthBk = monthBkRaw.sort((a,b) => (isoDate(a.Date)+a.Time).localeCompare(isoDate(b.Date)+b.Time));
-
-    const monthGcal = gcalEvts
-      .filter(e => e.date >= `${calY}-${String(calM+1).padStart(2,'0')}-01` && e.date <= `${calY}-${String(calM+1).padStart(2,'0')}-${String(dim).padStart(2,'0')}`)
-      .sort((a,b) => (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
-
-    // Group both by date
-    const byDate = {};
-    monthBk.forEach(b => {
-      const d = isoDate(b.Date);
-      if (!byDate[d]) byDate[d] = { app: [], gcal: [] };
-      byDate[d].app.push(b);
-    });
-    monthGcal.forEach(e => {
-      if (!byDate[e.date]) byDate[e.date] = { app: [], gcal: [] };
-      byDate[e.date].gcal.push(e);
-    });
-
-    const dates = Object.keys(byDate).sort();
-    if (dates.length === 0) {
-      agendaEl.innerHTML = `<div class="agenda-empty">No bookings in ${MONTHS[calM]}. Tap + Book to create one.</div>`;
-    } else {
-      agendaEl.innerHTML = dates.map(ds => {
-        const dayBk = byDate[ds];
-        const d = new Date(ds + 'T12:00:00');
-        const dayLabel = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-        const isToday = d.toDateString() === TODAY.toDateString();
-        return `<div class="agenda-day${isToday?' is-today':''}">
-          <div class="agenda-date">${dayLabel}${isToday?' <span class="agenda-today-chip">TODAY</span>':''}</div>
-          <div class="agenda-items">
-            ${dayBk.app.map(b => {
-              const t = getType(b.TypeID), m = getMember(b.PhotographerID);
-              return `<div class="agenda-item" onclick="openDetail('${b.ID}')">
-                <div class="agenda-time">${fmtTime(b.Time)}</div>
-                <div class="agenda-body">
-                  <div class="agenda-title">${b.Client}</div>
-                  <div class="agenda-meta"><span class="bdg nvy" style="font-size:8px">${t.Name}</span> · ${m.Name}</div>
-                </div>
-              </div>`;
-            }).join('')}
-            ${dayBk.gcal.map(e => `<div class="agenda-item agenda-gcal">
-              <div class="agenda-time">${e.time || '—'}</div>
-              <div class="agenda-body">
-                <div class="agenda-title">📅 ${e.title}</div>
-                <div class="agenda-meta">Google Calendar</div>
-              </div>
-            </div>`).join('')}
-          </div>
-        </div>`;
-      }).join('');
-    }
-  }
 
   // Fetch GCal in background and re-render when ready (only if not already cached)
   const uncached = members.filter(m=>!gcalCache[m.Email+'-'+calY+'-'+calM]);
