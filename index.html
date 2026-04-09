@@ -352,7 +352,17 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .slot-busy-lbl{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--tl);margin-top:2px}
 .bk-details{border-top:1px solid var(--bn);margin-top:16px;padding-top:16px}
 .bk-empty-msg{color:var(--tl);font-size:12px;text-align:center;padding:40px 20px;line-height:1.8}
-/* Booking modal breakpoint (covered by ≤768px block above) */
+/* ── Mobile overrides (placed AFTER base rules so cascade wins) ────── */
+@media(max-width:768px){
+  .bk-middle{grid-template-columns:1fr !important;min-height:auto !important}
+  .bk-cal-wrap{border-right:none !important;border-bottom:1px solid var(--bn);padding:14px}
+  .bk-slots-wrap{padding:14px;max-height:300px}
+  .bk-cal-grid{gap:1px}
+  .bk-day{font-size:11px;padding:6px 0}
+  .bk-dow{font-size:9px}
+  .desktop-only{display:none !important}
+  .mobile-only{display:block !important}
+}
 </style>
 </head>
 <body>
@@ -563,7 +573,7 @@ const TODAY = new Date();
 let calY = TODAY.getFullYear(), calM = TODAY.getMonth();
 let bkFilter = 'all', selColor = 'shoot', editBkId = null, viewBkId = null;
 let CU = null;
-const APP_VERSION = '2026.04.08-mobile-ui';
+const APP_VERSION = '2026.04.09-mobile-ui-2';
 console.log('%c LUXURYX Booking System — version ' + APP_VERSION, 'background:#0c233e;color:#fff;padding:4px 8px;border-radius:3px');
 
 // ── Calendar-sent cache (client-side) ─────────────────────────────────────
@@ -901,11 +911,16 @@ window.addEventListener('load', async () => {
   if (savedUserJson) {
     try {
       CU = JSON.parse(savedUserJson);
-      await loadAllData();
+      // Launch app immediately from cached user so the login screen never flashes
       launchApp();
       startTokenRefreshInterval();
+      // Load data in the background — do NOT clear session if this fails
+      loadAllData().catch(e => {
+        console.error('Background data load failed:', e);
+        notify('Could not reach server — check connection and retry.');
+      });
     } catch(e) {
-      console.error('Session restore failed:', e);
+      console.error('Session restore parse failed:', e);
       CU = null;
       localStorage.removeItem('lx_user');
     }
