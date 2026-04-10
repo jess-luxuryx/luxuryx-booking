@@ -434,7 +434,7 @@ tr:hover td{background:rgba(12,35,62,0.02)}
         </div>
         <div class="sb"><span style="color:var(--tl)">&#9906;</span><input type="text" id="bk-search" placeholder="Search bookings..." oninput="renderBkTable()"></div>
         <div style="overflow-x:auto">
-          <table><thead><tr><th>Date</th><th>Type</th><th>Photographer</th><th>Client / Property</th><th>Time</th><th>Status</th><th>Calendar</th><th>Actions</th></tr></thead><tbody id="bk-tbody"></tbody></table>
+          <table><thead><tr><th>Date</th><th>Type</th><th>Photographer</th><th>Client / Property</th><th>Time</th><th>Status</th><th>Actions</th></tr></thead><tbody id="bk-tbody"></tbody></table>
         </div>
       </div>
     </div>
@@ -1857,8 +1857,13 @@ function renderBkTable(){
   // Cancelled bookings are treated as permanently deleted — hide them from every view.
   bks = bks.filter(b => String(b.Status||'').toLowerCase().trim() !== 'cancelled');
   if(CU?.role==='photographer') bks=bks.filter(b=>getMember(b.PhotographerID).Name===CU.name);
-  // Use case-insensitive comparison — Google Sheets may return 'Upcoming' vs 'upcoming'
-  if(bkFilter!=='all') bks=bks.filter(b=>String(b.Status||'').toLowerCase().trim()===bkFilter);
+  // Normalise status before filtering — mirrors display normalisation (line ~1868).
+  // Bookings with blank/unknown status are treated as 'upcoming', so 'Upcoming' tab must show them.
+  if(bkFilter!=='all') bks=bks.filter(b=>{
+    const raw=String(b.Status||'').toLowerCase().trim();
+    const norm=['upcoming','completed','cancelled'].includes(raw)?raw:'upcoming';
+    return norm===bkFilter;
+  });
   if(q) bks=bks.filter(b=>(b.Client||'').toLowerCase().includes(q)||getMember(b.PhotographerID).Name.toLowerCase().includes(q));
   bks.sort((a,b)=>String(b.Date).localeCompare(String(a.Date)));
   document.getElementById('bk-tbody').innerHTML = bks.length ? bks.map(b=>{
@@ -1867,19 +1872,9 @@ function renderBkTable(){
     const rawStatus = String(b.Status||'').toLowerCase().trim();
     const normStatus = ['upcoming','completed','cancelled'].includes(rawStatus) ? rawStatus : 'upcoming';
     const sb={upcoming:'rose',completed:'green',cancelled:'red'}[normStatus]||'gry';
-    // Calendar is considered "sent" if any of: CalAdded flag TRUE, stored CalEventId,
-    // or a local cache entry from a previous successful send (covers the case where
-    // the backend didn't persist markCalAdded to the sheet).
+    // Back-fill CalEventId from local cache so cancel/delete can use the stored event ID.
     const cachedCal = isCalSentLocally(b.ID);
-    const calAdded = String(b.CalAdded).toUpperCase()==='TRUE'
-      || !!(b.CalEventId && String(b.CalEventId).trim())
-      || !!cachedCal;
-    // If the server doesn't have CalEventId but the cache does, back-fill it so
-    // delete/cancel can use the stored event ID.
     if (cachedCal && cachedCal.calEventId && !b.CalEventId) b.CalEventId = cachedCal.calEventId;
-    const calCell = normStatus==='upcoming'
-      ? `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'Pending'}</span>`
-      : `<span class="bdg ${calAdded?'cal-b':'gry'}">${calAdded?'Sent':'—'}</span>`;
     return `<tr class="bk-row">
       <td data-label="Date" style="color:var(--navy);font-weight:400">${fmtDate(b.Date)}</td>
       <td data-label="Type"><span class="bdg nvy">${t.Name}</span></td>
@@ -1887,13 +1882,12 @@ function renderBkTable(){
       <td data-label="Client" class="td-client" style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.Client}</td>
       <td data-label="Time">${fmtTime(b.Time)}</td>
       <td data-label="Status"><span class="bdg ${sb}">${normStatus}</span></td>
-      <td data-label="Calendar">${calCell}</td>
       <td data-label="" class="td-actions"><div class="fx" style="gap:5px">
         <button class="btn bsm" onclick="openDetail('${b.ID}')">View</button>
         ${normStatus==='upcoming' && isAdmin() ?`<button class="btn bsm" onclick="openBkModal('${b.ID}')">Edit</button>`:''}
       </div></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tl);font-size:12px">No bookings found</td></tr>`;
+  }).join('') : `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--tl);font-size:12px">No bookings found</td></tr>`;
 }
 
 // ══ Detail ════════════════════════════════════════════════════════════════════
