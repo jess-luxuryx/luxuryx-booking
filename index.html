@@ -1020,7 +1020,7 @@ function renderDashboard() {
 
 // ══ Calendar ════════════════════════════════════════════════════════════════
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DOWS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DOWS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 // Fetch Google Calendar events for a team member for the current month
 async function fetchGCalForMember(email, year, month) {
@@ -1067,7 +1067,8 @@ async function syncGCal() {
 function renderCal() {
   document.getElementById('cal-title').textContent = MONTHS[calM]+' '+calY;
   document.getElementById('cal-dow').innerHTML = DOWS.map(d=>`<div class="cdow">${d}</div>`).join('');
-  const fd=new Date(calY,calM,1).getDay(), dim=new Date(calY,calM+1,0).getDate(), dip=new Date(calY,calM,0).getDate();
+  // Monday-first week: convert JS getDay() (0=Sun) → (0=Mon … 6=Sun)
+  const fd=(new Date(calY,calM,1).getDay()+6)%7, dim=new Date(calY,calM+1,0).getDate(), dip=new Date(calY,calM,0).getDate();
   const fv = document.getElementById('cal-filter').value;
 
   // Collect all cached GCal events for visible team members
@@ -1082,9 +1083,8 @@ function renderCal() {
     else{dn=i-fd+1;}
     const ds=`${calY}-${String(calM+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
     if(!oth&&new Date(calY,calM,dn).toDateString()===TODAY.toDateString()) cls+=' tod';
-    // Mark weekends as non-bookable (Dubai work week is Mon-Fri)
-    const cellDow = new Date(calY, calM, oth ? (i<fd ? -(fd-1-i) : dim + (i-fd-dim+1)) : dn).getDay();
-    const isWeekend = cellDow === 0 || cellDow === 6;
+    // Mark weekends — in Monday-first layout col 5 = Sat, col 6 = Sun
+    const isWeekend = (i % 7) === 5 || (i % 7) === 6;
     if (isWeekend) cls += ' weekend';
 
     // App bookings — only show for current month weekdays (weekend bookings are invalid)
@@ -1264,13 +1264,14 @@ function renderBkCal() {
   if (!phId) return;
   const dur = parseInt(getType(typeId)?.Duration)||2;
   const todayStr = TODAY.toISOString().slice(0,10);
-  const fd = new Date(bkCalY, bkCalM, 1).getDay();
+  // Monday-first week
+  const fd = (new Date(bkCalY, bkCalM, 1).getDay() + 6) % 7;
   const dim = new Date(bkCalY, bkCalM+1, 0).getDate();
   let html = '<div class="bk-cal-hdr"><button class="caln" onclick="bkPrevM()">&#8249;</button>';
   html += '<div class="bk-cal-title">'+MONTHS[bkCalM]+' '+bkCalY+'</div>';
   html += '<button class="caln" onclick="bkNextM()">&#8250;</button></div>';
   html += '<div class="bk-cal-grid">';
-  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>{html+='<div class="bk-dow">'+d+'</div>';});
+  ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach(d=>{html+='<div class="bk-dow">'+d+'</div>';});
   for(let i=0;i<fd;i++) html+='<div class="bk-day empty"></div>';
   for(let d=1;d<=dim;d++){
     const ds=bkCalY+'-'+String(bkCalM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
