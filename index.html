@@ -1750,31 +1750,14 @@ async function saveBk(){
       const newBk={ID:res.id,Date:date,Time:time,TypeID:typeId,PhotographerID:primaryPhId,Client:client,Maps:maps,Agent:agent,Notes:notes,Status:'upcoming',CalAdded:'FALSE',CalEventId:''};
       D.bookings.push(newBk);
       
-      // Check if we have a valid token, refresh if needed
-      if(accessToken){
-        // Refresh token if it's older than 50 minutes
-        const tokenAge = Date.now() - (tokenIssuedAt || 0);
-        if (tokenAge > 50 * 60 * 1000) {
-          btn.textContent='Refreshing session…';
-          try {
-            await new Promise((resolve, reject) => {
-              const tempCallback = tokenClient.callback;
-              tokenClient.callback = (response) => {
-                if (response.error) reject(new Error(response.error));
-                else {
-                  accessToken = response.access_token;
-                  tokenIssuedAt = Date.now();
-                  resolve();
-                }
-              };
-              tokenClient.requestAccessToken({ prompt: '' });
-              setTimeout(() => { tokenClient.callback = tempCallback; reject(new Error('Token refresh timeout')); }, 5000);
-            });
-          } catch(refreshErr) {
-            // Continue with existing token
-          }
-        }
-        
+      // Ensure we have a fresh token before hitting the Calendar API
+      if(accessToken || (tokenClient && CU)){
+        btn.textContent='Refreshing session…';
+        const tokenOk = await ensureFreshToken();
+
+        if (!tokenOk && !accessToken) {
+          notify('Booking saved. Please sign out and back in to enable calendar invites.',true);
+        } else {
         btn.textContent='Creating calendar event…';
         try {
           const agentUser = D.users.find(u=>u.Name===agent) || null;
@@ -1816,6 +1799,7 @@ async function saveBk(){
           console.error('Calendar error:', calErr);
           notify('Booking saved — calendar failed: '+calErr.message);
         }
+        } // end tokenOk else
       } else {
         notify('Booking saved. Please sign out and back in to enable calendar invites.',true);
       }
@@ -1937,6 +1921,43 @@ function openDetail(id){
     </div>
     ${b.Notes?`<div style="background:var(--offwhite);border-radius:4px;padding:12px;border:1px solid var(--bn)"><div class="fl" style="margin-bottom:5px">Notes</div><div style="font-size:12px;color:var(--tm)">${b.Notes}</div></div>`:''}`;
   const acts=document.getElementById('det-actions');acts.innerHTML='';
+  // Retry Calendar button — shown for upcoming bookings missing a calendar event
+  if (!calAdded && normStatus === 'upcoming' && isAdmin()) {
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'btn';
+    retryBtn.style.cssText = 'background:#1a6b3c;color:#fff;margin-right:8px';
+    retryBtn.textContent = 'Retry Calendar';
+    retryBtn.onclick = async () => {
+      retryBtn.disabled = true; retryBtn.textContent = 'Sending…';
+      const tokenOk = await ensureFreshToken();
+      if (!tokenOk && !accessToken) {
+        notify('Please sign out and back in to enable calendar invites.');
+        retryBtn.disabled = false; retryBtn.textContent = 'Retry Calendar';
+        return;
+      }
+      try {
+        const m = getMember(b.PhotographerID);
+        const phEmails = getBkAttendeeEmails(b.TypeID, b.PhotographerID);
+        const agentUser = D.users.find(u=>u.Name===b.Agent) || null;
+        const agentEmail = agentUser?.Email || CU.email;
+        const finalPhEmails = phEmails.length > 0 ? phEmails : (CU?.email ? [CU.email] : []);
+        const calEvent = await createCalendarEvent(
+          {date: isoDate(b.Date), time: b.Time||'09:00', typeId: b.TypeID, client: b.Client, maps: b.Maps||'', agent: b.Agent||'', notes: b.Notes||''},
+          finalPhEmails, agentEmail
+        );
+        b.CalAdded = 'TRUE'; b.CalEventId = calEvent.id;
+        markCalSentLocally(b.ID, calEvent.id);
+        try { await api({action:'markCalAdded', id:b.ID, calEventId: calEvent.id}); } catch(_) {}
+        notify('Calendar invite sent ✓', true);
+        closeMo('mo-detail'); renderBkTable(); renderDashboard();
+      } catch(e) {
+        console.error('Retry calendar error:', e);
+        notify('Calendar failed: ' + e.message);
+        retryBtn.disabled = false; retryBtn.textContent = 'Retry Calendar';
+      }
+    };
+    acts.appendChild(retryBtn);
+  }
   // Cancel = permanent delete + calendar event removal.
   // Admins can cancel any upcoming booking; agents can only cancel their OWN upcoming bookings.
   const canCancel = normStatus==='upcoming' && (
