@@ -1798,6 +1798,13 @@ async function saveBk(){
             } catch(persistErr) {
               console.warn('markCalAdded backend call failed, but calendar event was created:', persistErr);
             }
+            // Bust the GCal cache for all affected emails so the new event shows immediately
+            // on the LUXURYX calendar view when renderCal runs after closing this modal.
+            const bkD = new Date(date + 'T12:00:00');
+            const bkYr = bkD.getFullYear(), bkMo = bkD.getMonth();
+            [...finalPhEmails, agentEmail].filter(Boolean).forEach(em => {
+              delete gcalCache[em + '-' + bkYr + '-' + bkMo];
+            });
             notify('Booking confirmed — calendar invite sent ✓',true);
           }
         } catch(calErr){
@@ -1808,6 +1815,8 @@ async function saveBk(){
         notify('Booking saved. Please sign out and back in to enable calendar invites.',true);
       }
       closeMo('mo-booking'); renderDashboard(); renderBkTable(); renderCal();
+      // Re-sync GCal in the background so the new event appears on the calendar view
+      if (accessToken) syncGCal().catch(() => {});
     } else {
       const bk=D.bookings.find(x=>String(x.ID)===String(editBkId));
       if(bk) Object.assign(bk,{Date:date,Time:time,TypeID:typeId,PhotographerID:primaryPhId,Client:client,Maps:maps,Agent:agent,Notes:notes});
