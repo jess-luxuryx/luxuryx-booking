@@ -110,7 +110,7 @@ tr:hover td{background:rgba(12,35,62,0.02)}
 .calt{font-size:14px;font-weight:300;color:var(--white);letter-spacing:3px;text-transform:uppercase}
 .caln{background:none;border:1px solid rgba(255,255,255,0.2);color:var(--rose);font-size:16px;width:30px;height:30px;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .caln:hover{background:rgba(255,255,255,0.08)}
-.cg{display:grid;grid-template-columns:repeat(7,1fr)}
+.cg{display:grid;grid-template-columns:repeat(5,1fr)}
 .cdow{text-align:center;padding:10px 4px;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--tl);border-bottom:1px solid var(--light);background:var(--offwhite);font-weight:500}
 .cday{min-height:68px;padding:6px;border-right:1px solid var(--light);border-bottom:1px solid var(--light);cursor:pointer;transition:background .15s}
 .cday:hover{background:rgba(12,35,62,0.03)}
@@ -1020,7 +1020,7 @@ function renderDashboard() {
 
 // ══ Calendar ════════════════════════════════════════════════════════════════
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DOWS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DOWS=['Mon','Tue','Wed','Thu','Fri'];
 
 // Fetch Google Calendar events for a team member for the current month
 async function fetchGCalForMember(email, year, month) {
@@ -1067,41 +1067,40 @@ async function syncGCal() {
 function renderCal() {
   document.getElementById('cal-title').textContent = MONTHS[calM]+' '+calY;
   document.getElementById('cal-dow').innerHTML = DOWS.map(d=>`<div class="cdow">${d}</div>`).join('');
-  // Monday-first week: convert JS getDay() (0=Sun) → (0=Mon … 6=Sun)
-  const fd=(new Date(calY,calM,1).getDay()+6)%7, dim=new Date(calY,calM+1,0).getDate(), dip=new Date(calY,calM,0).getDate();
   const fv = document.getElementById('cal-filter').value;
 
   // Collect all cached GCal events for visible team members
   const members = fv==='all' ? D.team.filter(m=>m.Email) : D.team.filter(m=>String(m.ID)===fv&&m.Email);
   const gcalEvts = members.flatMap(m=>(gcalCache[m.Email+'-'+calY+'-'+calM]||[]));
 
+  // Mon–Fri 5-column calendar. Find the Monday on or before the 1st of the month.
+  const firstDow = new Date(calY,calM,1).getDay(); // 0=Sun … 6=Sat
+  const daysBack = firstDow===0 ? 6 : firstDow-1;  // steps back to nearest Monday
+  const endOfMonth = new Date(calY,calM+1,0);
+
   let cells='';
-  for(let i=0;i<42;i++){
-    let dn,cls='cday',oth=false;
-    if(i<fd){dn=dip-fd+i+1;oth=true;cls+=' om';}
-    else if(i-fd>=dim){dn=i-fd-dim+1;oth=true;cls+=' om';}
-    else{dn=i-fd+1;}
-    const ds=`${calY}-${String(calM+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
-    if(!oth&&new Date(calY,calM,dn).toDateString()===TODAY.toDateString()) cls+=' tod';
-    // Mark weekends — in Monday-first layout col 5 = Sat, col 6 = Sun
-    const isWeekend = (i % 7) === 5 || (i % 7) === 6;
-    if (isWeekend) cls += ' weekend';
-
-    // App bookings — only show for current month weekdays (weekend bookings are invalid)
-    const evts = (oth || isWeekend) ? [] : D.bookings.filter(b=>b.Status!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
-    const evH=evts.slice(0,2).map(b=>{const t=getType(b.TypeID);return`<div class="dev ${evCls(t.Color)}" onclick="event.stopPropagation();openDetail('${b.ID}')" title="${b.Client}">${fmtTime(b.Time)} ${t.Name}</div>`;}).join('');
-
-    // GCal events — only show for current month weekdays
-    const dayGcal = (oth || isWeekend) ? [] : gcalEvts.filter(e=>e.date===ds);
-    const gcalH = dayGcal.slice(0,2).map(e=>`<div class="dev" style="background:rgba(66,133,244,0.12);color:#3367d6;border-left:2px solid #4285f4" title="${e.title} (Google Calendar)">📅 ${e.title}</div>`).join('');
-
-    const total = evts.length + dayGcal.length;
-    const shown = Math.min(evts.length,2) + Math.min(dayGcal.length,2);
-    const more = total > shown ? `<div style="font-size:9px;color:var(--tl)">+${total-shown} more</div>` : '';
-
-    // Weekends aren't clickable (no new booking can start on a weekend)
-    const clickHandler = isWeekend ? '' : ` onclick="onDayClick('${ds}')"`;
-    cells+=`<div class="${cls}"${clickHandler}><div class="dnum">${dn}</div>${evH}${gcalH}${more}</div>`;
+  for(let row=0;row<6;row++){
+    // Stop once this row starts after the end of the month
+    const rowStart = new Date(calY,calM,1-daysBack+row*7);
+    if(row>0 && rowStart>endOfMonth) break;
+    for(let col=0;col<5;col++){
+      const cellDate = new Date(calY,calM,1-daysBack+row*7+col);
+      const dn = cellDate.getDate();
+      const oth = cellDate.getMonth()!==calM || cellDate.getFullYear()!==calY;
+      let cls='cday';
+      if(oth) cls+=' om';
+      if(!oth && cellDate.toDateString()===TODAY.toDateString()) cls+=' tod';
+      // Use the cell's real date for the ds string (fixes previous-month cell dates)
+      const ds=`${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
+      const evts = oth ? [] : D.bookings.filter(b=>b.Status!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
+      const evH=evts.slice(0,2).map(b=>{const t=getType(b.TypeID);return`<div class="dev ${evCls(t.Color)}" onclick="event.stopPropagation();openDetail('${b.ID}')" title="${b.Client}">${fmtTime(b.Time)} ${t.Name}</div>`;}).join('');
+      const dayGcal = oth ? [] : gcalEvts.filter(e=>e.date===ds);
+      const gcalH = dayGcal.slice(0,2).map(e=>`<div class="dev" style="background:rgba(66,133,244,0.12);color:#3367d6;border-left:2px solid #4285f4" title="${e.title} (Google Calendar)">📅 ${e.title}</div>`).join('');
+      const total=evts.length+dayGcal.length, shown=Math.min(evts.length,2)+Math.min(dayGcal.length,2);
+      const more=total>shown?`<div style="font-size:9px;color:var(--tl)">+${total-shown} more</div>`:'';
+      const clickHandler=oth?'':` onclick="onDayClick('${ds}')"`;
+      cells+=`<div class="${cls}"${clickHandler}><div class="dnum">${dn}</div>${evH}${gcalH}${more}</div>`;
+    }
   }
   document.getElementById('cal-days').innerHTML=cells;
   const cf=document.getElementById('cal-filter'),cv=cf.value;
