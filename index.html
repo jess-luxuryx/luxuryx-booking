@@ -1392,16 +1392,23 @@ async function createCalendarEvent(bk, photographerEmails, agentEmail) {
   const t = getType(bk.typeId);
   const dur = parseInt(t?.Duration)||2;
 
-  const startDT = bk.date + 'T' + bk.time + ':00+04:00';
-  const [sh, sm] = bk.time.split(':').map(Number);
+  // Normalise time — sheet values may arrive as Sheets datetime strings; fmtTime converts them
+  const normTime = /^\d{1,2}:\d{2}$/.test(bk.time||'') ? bk.time : (fmtTime(bk.time)||'09:00');
+  // Ensure HH:MM padding (e.g. "9:00" → "09:00")
+  const [rawH, rawM] = normTime.split(':');
+  const paddedTime = String(parseInt(rawH)||9).padStart(2,'0') + ':' + String(parseInt(rawM)||0).padStart(2,'0');
+
+  const startDT = bk.date + 'T' + paddedTime + ':00+04:00';
+  const [sh, sm] = paddedTime.split(':').map(Number);
   const endTotalMins = sh * 60 + sm + dur * 60;
   const endH = String(Math.floor(endTotalMins / 60)).padStart(2, '0');
   const endM = String(endTotalMins % 60).padStart(2, '0');
   const endDT = bk.date + 'T' + endH + ':' + endM + ':00+04:00';
 
-  const attendees = photographerEmails.map(e=>({ email: e }));
-  if (agentEmail && !photographerEmails.includes(agentEmail)) {
-    attendees.push({ email: agentEmail });
+  const validEmail = e => e && typeof e === 'string' && e.includes('@') && e.trim().length > 3;
+  const attendees = photographerEmails.filter(validEmail).map(e=>({ email: e.trim() }));
+  if (validEmail(agentEmail) && !photographerEmails.includes(agentEmail)) {
+    attendees.push({ email: agentEmail.trim() });
   }
 
   const desc = [
@@ -1942,7 +1949,7 @@ function openDetail(id){
         const agentEmail = agentUser?.Email || CU.email;
         const finalPhEmails = phEmails.length > 0 ? phEmails : (CU?.email ? [CU.email] : []);
         const calEvent = await createCalendarEvent(
-          {date: isoDate(b.Date), time: b.Time||'09:00', typeId: b.TypeID, client: b.Client, maps: b.Maps||'', agent: b.Agent||'', notes: b.Notes||''},
+          {date: isoDate(b.Date), time: fmtTime(b.Time)||'09:00', typeId: b.TypeID, client: b.Client, maps: b.Maps||'', agent: b.Agent||'', notes: b.Notes||''},
           finalPhEmails, agentEmail
         );
         b.CalAdded = 'TRUE'; b.CalEventId = calEvent.id;
