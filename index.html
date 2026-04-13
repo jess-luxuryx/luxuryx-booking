@@ -959,8 +959,18 @@ function fmtDateLong(d,t) {
   return dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' at '+t;
 }
 function isoDate(d) {
-  const dt = new Date(String(d).includes('T') ? d : d+'T12:00:00');
-  return dt.toISOString().split('T')[0];
+  if (!d) return '';
+  const s = String(d).trim();
+  // Already a plain ISO date with no time — return as-is (avoids any timezone conversion)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Full ISO datetime or any other string — convert using Dubai local timezone so the
+  // date we get back is always the Dubai calendar date, not the UTC date.
+  // (e.g. "2026-04-15T20:00:00.000Z" is midnight Dubai Apr 16 — must return "2026-04-16")
+  const dt = new Date(s.includes('T') ? s : s + 'T12:00:00');
+  if (isNaN(dt.getTime())) return s;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(dt);
 }
 function evCls(c) { return {shoot:'es',edit:'ee',video:'ev',blocked:'eb'}[c]||'eb'; }
 function isAdmin() { return CU && ['admin','superadmin'].includes(CU.role); }
@@ -1092,7 +1102,7 @@ function renderCal() {
       if(!oth && cellDate.toDateString()===TODAY.toDateString()) cls+=' tod';
       // Use the cell's real date for the ds string (fixes previous-month cell dates)
       const ds=`${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`;
-      const evts = oth ? [] : D.bookings.filter(b=>b.Status!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
+      const evts = oth ? [] : D.bookings.filter(b=>String(b.Status||'').toLowerCase().trim()!=='cancelled'&&isoDate(b.Date)===ds&&(fv==='all'||String(b.PhotographerID)===fv));
       const evH=evts.slice(0,2).map(b=>{const t=getType(b.TypeID);return`<div class="dev ${evCls(t.Color)}" onclick="event.stopPropagation();openDetail('${b.ID}')" title="${b.Client}">${fmtTime(b.Time)} ${t.Name}</div>`;}).join('');
       const dayGcal = oth ? [] : gcalEvts.filter(e=>e.date===ds);
       const gcalH = dayGcal.slice(0,2).map(e=>`<div class="dev" style="background:rgba(66,133,244,0.12);color:#3367d6;border-left:2px solid #4285f4" title="${e.title} (Google Calendar)">📅 ${e.title}</div>`).join('');
@@ -1204,7 +1214,7 @@ function isSlotAvailable(phId, ds, time, dur) {
   // Check app bookings first
   const conflicts = D.bookings.filter(b=>
     String(b.PhotographerID)===String(phId) && isoDate(b.Date)===ds &&
-    b.Status!=='cancelled' && String(b.ID)!==String(editBkId)
+    String(b.Status||'').toLowerCase().trim()!=='cancelled' && String(b.ID)!==String(editBkId)
   );
   
   for (const b of conflicts) {
@@ -1688,7 +1698,7 @@ async function chkAvail(){
   const h=document.getElementById('avail-hint');
   if(!phId||!date){h.style.display='none';return;}
   const m=getMember(phId);
-  const conflicts=D.bookings.filter(b=>String(b.PhotographerID)===phId&&isoDate(b.Date)===date&&b.Status!=='cancelled'&&String(b.ID)!==String(editBkId));
+  const conflicts=D.bookings.filter(b=>String(b.PhotographerID)===phId&&isoDate(b.Date)===date&&String(b.Status||'').toLowerCase().trim()!=='cancelled'&&String(b.ID)!==String(editBkId));
   if(conflicts.length>0){showAvailHint(false,m.Name+' has '+conflicts.length+' booking(s) on this date');return;}
   if(m.Email&&accessToken){
     h.style.cssText='display:block;background:rgba(12,35,62,0.04);border:1px solid var(--bn);color:var(--tl);font-size:11px;padding:8px 12px;border-radius:3px;margin-bottom:4px';
